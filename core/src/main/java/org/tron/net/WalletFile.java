@@ -7,6 +7,7 @@ import com.google.gson.JsonDeserializer;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
+import com.google.gson.annotations.SerializedName;
 
 import java.lang.reflect.Type;
 
@@ -16,7 +17,11 @@ import java.lang.reflect.Type;
 public class WalletFile {
 
   private String address;
+
+  // Serializes as "crypto"; deserializes from either "crypto" or legacy "Crypto".
+  @SerializedName(value = "crypto", alternate = {"Crypto"})
   private Crypto crypto;
+
   private String id;
   private int version;
 
@@ -40,10 +45,6 @@ public class WalletFile {
 
   public void setCrypto(Crypto crypto) {
     this.crypto = crypto;
-  }
-
-  public void setCryptoV1(Crypto crypto) {
-    setCrypto(crypto);
   }
 
   public String getId() {
@@ -455,27 +456,9 @@ public class WalletFile {
     }
   }
 
-  static class WalletFileDeserializer implements JsonDeserializer<WalletFile> {
-    @Override
-    public WalletFile deserialize(JsonElement json, Type typeOfT,
-                                   JsonDeserializationContext context) throws JsonParseException {
-      JsonObject obj = json.getAsJsonObject();
-      WalletFile wf = new WalletFile();
-      if (obj.has("address")) wf.setAddress(obj.get("address").getAsString());
-      if (obj.has("id")) wf.setId(obj.get("id").getAsString());
-      if (obj.has("version")) wf.setVersion(obj.get("version").getAsInt());
-      JsonElement cryptoElem = obj.has("crypto") ? obj.get("crypto") : obj.get("Crypto");
-      if (cryptoElem != null) {
-        wf.setCrypto(context.deserialize(cryptoElem, Crypto.class));
-      }
-      return wf;
-    }
-  }
-
   public static Gson createGson() {
     return new GsonBuilder()
         .registerTypeAdapter(KdfParams.class, new KdfParamsDeserializer())
-        .registerTypeAdapter(WalletFile.class, new WalletFileDeserializer())
         .create();
   }
 }

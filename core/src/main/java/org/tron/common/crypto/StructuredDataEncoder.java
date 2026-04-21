@@ -68,15 +68,18 @@ public class StructuredDataEncoder {
         public StructuredData.EIP712Domain deserialize(JsonElement json, java.lang.reflect.Type typeOfT,
                 JsonDeserializationContext context) throws JsonParseException {
             JsonObject obj = json.getAsJsonObject();
-            String name = obj.has("name") ? obj.get("name").getAsString() : null;
-            String version = obj.has("version") ? obj.get("version").getAsString() : null;
-            String chainId = obj.has("chainId") ? obj.get("chainId").getAsString() : null;
-            String verifyingContract = obj.has("verifyingContract")
-                    ? obj.get("verifyingContract").getAsString() : null;
-            String salt = obj.has("salt") ? obj.get("salt").getAsString() : null;
+            String name = optString(obj, "name");
+            String version = optString(obj, "version");
+            String chainId = optString(obj, "chainId");
+            String verifyingContract = optString(obj, "verifyingContract");
+            String salt = optString(obj, "salt");
             org.tron.common.crypto.datatypes.Address addressObj = verifyingContract != null
                     ? new org.tron.common.crypto.datatypes.Address(verifyingContract) : null;
             return new StructuredData.EIP712Domain(name, version, chainId, addressObj, salt);
+        }
+
+        private static String optString(JsonObject obj, String key) {
+            return obj.has(key) && !obj.get(key).isJsonNull() ? obj.get(key).getAsString() : null;
         }
     }
 
@@ -575,9 +578,12 @@ public class StructuredDataEncoder {
 
     public StructuredData.EIP712Message parseJSONMessage(String jsonMessageInString)
             throws IOException, RuntimeException {
+        // LAZILY_PARSED_NUMBER preserves uint256 precision when dapps send numeric
+        // literals (e.g. {"amount": 115792089237316195423570985008687907853269984665640564039457584007913129639935})
+        // instead of strings — Long/Double would silently truncate.
         Gson gson = new GsonBuilder()
             .registerTypeAdapter(StructuredData.EIP712Domain.class, new EIP712DomainDeserializer())
-            .setObjectToNumberStrategy(ToNumberPolicy.LONG_OR_DOUBLE)
+            .setObjectToNumberStrategy(ToNumberPolicy.LAZILY_PARSED_NUMBER)
             .create();
 
         // convert JSON string to EIP712Message object

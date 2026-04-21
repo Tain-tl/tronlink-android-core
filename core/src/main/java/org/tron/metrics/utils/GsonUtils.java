@@ -1,6 +1,8 @@
 package org.tron.metrics.utils;
 
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.ToNumberPolicy;
 import com.google.gson.reflect.TypeToken;
 
 import java.util.Map;
@@ -10,7 +12,9 @@ public class GsonUtils {
     private static final Gson gson;
 
     static {
-        gson = new Gson();
+        gson = new GsonBuilder()
+                .setObjectToNumberStrategy(ToNumberPolicy.LAZILY_PARSED_NUMBER)
+                .create();
     }
 
     private GsonUtils() {

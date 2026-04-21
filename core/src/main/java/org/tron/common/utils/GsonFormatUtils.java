@@ -3,6 +3,7 @@ package org.tron.common.utils;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.ToNumberPolicy;
 import com.google.gson.TypeAdapter;
 import com.google.gson.internal.LinkedTreeMap;
 import com.google.gson.reflect.TypeToken;
@@ -23,7 +24,10 @@ public class GsonFormatUtils {
 
     static {
         if (gson == null) {
-            gson = new Gson();
+            gson = new GsonBuilder()
+                    .setObjectToNumberStrategy(ToNumberPolicy.LAZILY_PARSED_NUMBER)
+                    .setNumberToNumberStrategy(ToNumberPolicy.LAZILY_PARSED_NUMBER)
+                    .create();
         }
     }
 
@@ -131,7 +135,7 @@ public class GsonFormatUtils {
                 case NUMBER:
                     String n = in.nextString();
                     if (n.indexOf('.') != -1) {
-                        return in.nextDouble();
+                        return Double.parseDouble(n);
                     }
                     return new BigDecimal(n).toPlainString();
 

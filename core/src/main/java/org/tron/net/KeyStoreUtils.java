@@ -2,8 +2,6 @@ package org.tron.net;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
-import com.google.gson.Gson;
-
 import org.bouncycastle.crypto.digests.SHA256Digest;
 import org.bouncycastle.crypto.generators.PKCS5S2ParametersGenerator;
 import org.bouncycastle.crypto.generators.SCrypt;
@@ -67,7 +65,7 @@ public class KeyStoreUtils {
         if(AddressUtil.isAddressValid(address)){
             hexAddress=  Hex.toHexString(AddressUtil.decodeFromBase58Check(address));
         }
-        return new Gson().toJson(createWalletFile(hexAddress, cipherText, iv, salt, mac, N_STANDARD, P_STANDARD));
+        return WalletFile.createGson().toJson(createWalletFile(hexAddress, cipherText, iv, salt, mac, N_STANDARD, P_STANDARD));
     }
 
     public static String getPrivateWithKeyStore(String keyStore, String password) throws CipherException, IOException {
