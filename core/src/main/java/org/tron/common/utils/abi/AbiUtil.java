@@ -117,10 +117,7 @@ public class AbiUtil {
         CoderArray(String arrayType, int length) {
             this.elementType = arrayType;
             this.length = length;
-            if (length == -1) {
-                this.dynamic = true;
-            }
-            this.dynamic = true;
+            this.dynamic = (length == -1);
         }
 
         @Override
