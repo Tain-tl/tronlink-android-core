@@ -299,6 +299,8 @@ public class TransactionUtils {
     }
 
     public static String sign(String unSign, ECKey myKey) {
+        if (unSign == null || unSign.isEmpty())
+            throw new IllegalArgumentException("unSign must not be empty");
         unSign = unSign.replaceFirst("0x", "");
         byte[] bytes;
         if (AddressUtil.isHexString(unSign)) {
