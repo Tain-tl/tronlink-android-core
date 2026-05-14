@@ -279,6 +279,9 @@ public class TransactionUtils {
         //TODO Temporary add，3。3。0 changed to throw exception
         if (hash == null || hash.length == 0) return transactionBuilderSigned.build();
 
+        if (!isMainChain && chainId == null) {
+            throw new IllegalArgumentException("chainId required when isMainChain=false");
+        }
         byte[] newHash;
         if (isMainChain) {
             newHash = hash;
