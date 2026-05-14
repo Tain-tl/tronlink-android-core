@@ -26,7 +26,8 @@ public abstract class MetricsDatabase extends RoomDatabase {
 
     public static MetricsDatabase getInstance() {
         if (INSTANCE == null) {
-            throw new IllegalStateException("MetricsDatabase not initialized");
+            throw new IllegalStateException(
+                    "MetricsDatabase not initialized. Call MetricsDatabase.init(context, env) before use.");
         }
         return INSTANCE;
     }
