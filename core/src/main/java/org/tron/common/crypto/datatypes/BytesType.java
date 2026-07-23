@@ -21,7 +21,11 @@ public abstract class BytesType implements Type<byte[]> {
     private String type;
 
     public BytesType(byte[] src, String type) {
-        this.value = src;
+        // Defensive copy: don't retain the caller's array. Without this, the caller
+        // (or a consumer of getValue()) could mutate the backing array in place and
+        // break the value's immutability, including poisoning shared DEFAULT
+        // constants such as Bytes32.DEFAULT / DynamicBytes.DEFAULT.
+        this.value = src == null ? null : src.clone();
         this.type = type;
     }
 
@@ -37,7 +41,8 @@ public abstract class BytesType implements Type<byte[]> {
 
     @Override
     public byte[] getValue() {
-        return value;
+        // Return a copy so callers cannot mutate the internal (or shared DEFAULT) array.
+        return value == null ? null : value.clone();
     }
 
     @Override
