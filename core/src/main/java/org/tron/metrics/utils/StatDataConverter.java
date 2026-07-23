@@ -1,8 +1,5 @@
 package org.tron.metrics.utils;
 
-import com.google.gson.Gson;
-import com.google.gson.reflect.TypeToken;
-
 import org.tron.common.utils.LogUtils;
 import org.tron.metrics.bean.BalanceCacheEntity;
 import org.tron.metrics.bean.StatXData;
@@ -170,7 +167,7 @@ public class StatDataConverter {
 
     private static String formatDistribution(String distributionJson) {
         try {
-            Map<String, Integer> map = changeGsonToMap(distributionJson);
+            Map<String, Integer> map = GsonUtils.gsonToMap(distributionJson);
             return map == null ? "" : String.join(",",
                                                   map.entrySet().stream()
                                                           .map(entry -> entry.getKey() + ":" + entry.getValue())
@@ -181,10 +178,5 @@ public class StatDataConverter {
             LogUtils.e(TAG, "formatDistribution failed: " + e.getMessage());
             return "";
         }
-    }
-
-    private static Map<String, Integer> changeGsonToMap(String gsonString) {
-        return new Gson().fromJson(gsonString, new TypeToken<Map<String, Integer>>() {
-        }.getType());
     }
 }

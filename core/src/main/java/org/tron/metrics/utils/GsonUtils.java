@@ -37,8 +37,7 @@ public class GsonUtils {
     }
 
     public static Map<String, Integer> gsonToMap(String gsonString) {
-        // TypeToken forces Integer, so new Gson() is equivalent to the singleton here.
-        return new Gson().fromJson(gsonString, new TypeToken<Map<String, Integer>>() {
+        return gson.fromJson(gsonString, new TypeToken<Map<String, Integer>>() {
         }.getType());
     }
 
