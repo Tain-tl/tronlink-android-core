@@ -55,6 +55,12 @@ public class DataFormatInterceptor implements Interceptor {
             throw new IOException("stat upload aborted: missing 'signature' query param");
         }
 
+        // accepted: [Q-02] The body was already serialized in DataUploader.createRequestBody,
+        // and here it is buffered + reparsed back into a StatDataRequest (a redundant
+        // serialize -> copy -> parse each upload). Kept as-is: it only runs on the low-frequency
+        // batched stats upload, and the ts/signature this branch needs are added by the host's
+        // signing interceptor and are only available at interceptor time, so encryption cannot be
+        // hoisted into createRequestBody without refactoring the host signing flow. Scan 2026-07-21.
         Buffer buffer = new Buffer();
         originalBody.writeTo(buffer);
         String originalJson = buffer.readString(StandardCharsets.UTF_8);
