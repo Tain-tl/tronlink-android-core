@@ -13,6 +13,9 @@ public interface Parameter {
         int BANDWIDTH_COST = 70;
         int SIGNATURE_COST = 65;
 
+        // NOTE: legacy factor, do NOT use for exact fee math (binary floating point).
+        // Kept as-is (unused in core); if fee arithmetic is ever added, use long SUN
+        // or BigDecimal instead. Scan 2026-07-21 Q-14, accepted.
         double feeBandWidth = 0.001;//1 bandwidth = 0.00014TRX  // shasta dappchain
 
         long feeLimit = 225000000;
