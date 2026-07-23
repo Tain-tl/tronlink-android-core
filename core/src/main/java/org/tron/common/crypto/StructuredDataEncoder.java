@@ -515,6 +515,7 @@ public class StructuredDataEncoder {
             Class<Type> typeClazz = (Class<Type>) AbiTypes.getType(encTypes.get(i));
 
             boolean atleastOneConstructorExistsForGivenParametersType = false;
+            Exception lastConstructorFailure = null;
             // Using the Reflection API to get the types of the parameters
             Constructor[] constructors = typeClazz.getConstructors();
             for (Constructor constructor : constructors) {
@@ -534,7 +535,8 @@ public class StructuredDataEncoder {
                         | NoSuchMethodException
                         | InstantiationException
                         | IllegalAccessException
-                        | InvocationTargetException ignored) {
+                        | InvocationTargetException e) {
+                    lastConstructorFailure = e;
                 }
             }
 
@@ -543,7 +545,8 @@ public class StructuredDataEncoder {
                         String.format(
                                 "Received an invalid argument for which no constructor"
                                         + " exists for the ABI Class %s",
-                                typeClazz.getSimpleName()));
+                                typeClazz.getSimpleName()),
+                        lastConstructorFailure);
             }
         }
 
@@ -637,8 +640,7 @@ public class StructuredDataEncoder {
 
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
 
-        final String messagePrefix = "\u0019\u0001";
-        byte[] prefix = messagePrefix.getBytes();
+        byte[] prefix = new byte[] {0x19, 0x01};
         baos.write(prefix, 0, prefix.length);
 
         byte[] domainHash = hashDomain();

@@ -35,6 +35,18 @@ public class StructuredDataEncoderBytesArrayTest {
                 + "}";
     }
 
+    private static String scalarMessageJson(String item) {
+        return "{"
+                + "\"types\":{"
+                + "\"EIP712Domain\":[{\"name\":\"name\",\"type\":\"string\"}],"
+                + "\"Payload\":[{\"name\":\"item\",\"type\":\"bytes32\"}]"
+                + "},"
+                + "\"primaryType\":\"Payload\","
+                + "\"domain\":{\"name\":\"Test\"},"
+                + "\"message\":{\"item\":\"" + item + "\"}"
+                + "}";
+    }
+
     @Test
     public void validBytes32Array_hashesSuccessfully() throws Exception {
         byte[] hash = new StructuredDataEncoder(messageJson(VALID_ITEM)).hashMessage();
@@ -61,6 +73,18 @@ public class StructuredDataEncoderBytesArrayTest {
             encoder.hashMessage();
             Assert.fail("Expected IllegalArgumentException for 33-byte bytes32 element");
         } catch (IllegalArgumentException expected) {
+        }
+    }
+
+    @Test
+    public void invalidScalarBytes32_preservesConstructorFailure() throws Exception {
+        StructuredDataEncoder encoder = new StructuredDataEncoder(scalarMessageJson(SHORT_ITEM));
+
+        try {
+            encoder.hashMessage();
+            Assert.fail("Expected IllegalArgumentException for 31-byte bytes32 field");
+        } catch (IllegalArgumentException expected) {
+            Assert.assertNotNull(expected.getCause());
         }
     }
 }

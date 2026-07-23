@@ -21,6 +21,7 @@ import org.tron.common.crypto.datatypes.Type;
 import org.tron.common.crypto.spi.FunctionEncoderProvider;
 
 import java.lang.reflect.InvocationTargetException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -108,7 +109,7 @@ public abstract class FunctionEncoder {
     }
 
     public static String buildMethodId(final String methodSignature) {
-        final byte[] input = methodSignature.getBytes();
+        final byte[] input = methodSignature.getBytes(StandardCharsets.UTF_8);
         final byte[] hash = Hash.sha3(input);
         return Numeric.toHexString(hash).substring(0, 10);
     }

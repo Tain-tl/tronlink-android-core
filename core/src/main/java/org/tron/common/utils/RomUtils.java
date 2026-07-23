@@ -102,20 +102,27 @@ public class RomUtils {
 
     public static int getTotalMemory() {
         String str1 = "/proc/meminfo";// system memory information file
-        String str2;
-        String[] arrayOfString;
         int initial_memory = 6;
         try (FileReader localFileReader = new FileReader(str1);
              BufferedReader localBufferedReader = new BufferedReader(localFileReader, 8192)) {
-            str2 = localBufferedReader.readLine();// Read the first line of meminfo, the total system memory size
-            arrayOfString = str2.split("\\s+");
-            // Get the total system memory in KB
-            int i = Integer.valueOf(arrayOfString[1]).intValue();
-            initial_memory = i / 1024 / 1024;
-            return initial_memory;
+            String firstLine = localBufferedReader.readLine();
+            return parseTotalMemoryGb(firstLine);
         } catch (Exception e) {
+            LogUtils.w("read /proc/meminfo failed", e);
             return initial_memory;
         }
 
+    }
+
+    static int parseTotalMemoryGb(String firstLine) {
+        if (firstLine == null) {
+            throw new IllegalArgumentException("/proc/meminfo is empty");
+        }
+        String[] fields = firstLine.trim().split("\\s+");
+        if (fields.length < 2) {
+            throw new IllegalArgumentException("Invalid /proc/meminfo MemTotal line: " + firstLine);
+        }
+        long totalMemoryKb = Long.parseLong(fields[1]);
+        return (int) (totalMemoryKb / 1024 / 1024);
     }
 }

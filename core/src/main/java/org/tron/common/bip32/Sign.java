@@ -14,6 +14,7 @@ import org.tron.common.crypto.ECKey;
 import org.tron.common.crypto.Hash;
 
 import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
 import java.security.SignatureException;
 import java.util.Arrays;
 
@@ -36,8 +37,9 @@ public class Sign {
 
     static byte[] getEthereumMessagePrefix(int messageLength) {
         // https://github.com/ethereum/go-ethereum/issues/14794
-        return MESSAGE_TRXPREFIX.concat(String.valueOf(messageLength)).getBytes();
-//        return MESSAGE_TRXPREFIX.concat(String.valueOf(32)).getBytes();
+        return MESSAGE_TRXPREFIX.concat(String.valueOf(messageLength))
+                .getBytes(StandardCharsets.UTF_8);
+//        return MESSAGE_TRXPREFIX.concat(String.valueOf(32)).getBytes(StandardCharsets.UTF_8);
     }
 
     static byte[] getEthereumMessageHash(byte[] message, byte[] prefix) {
@@ -105,7 +107,7 @@ public class Sign {
             }
         }
         if (recId == -1) {
-            throw new RuntimeException(
+            throw new IllegalArgumentException(
                     "Could not construct a recoverable key. Are your credentials valid?");
         }
 

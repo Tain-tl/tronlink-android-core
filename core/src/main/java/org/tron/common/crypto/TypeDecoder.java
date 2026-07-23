@@ -383,6 +383,10 @@ public class TypeDecoder {
     static <T extends Type> T decodeStaticArray(
             String input, int offset, TypeReference<T> typeReference, int length) {
 
+        // Unlike dynamic-array lengths, this value is declared by the caller's TypeReference
+        // rather than decoded from contract return data. Keep upstream web3j behavior here;
+        // callers must not construct TypeReferences from untrusted, unbounded ABI declarations.
+
         BiFunction<List<T>, String, T> function =
                 (elements, typeName) -> {
                     if (elements.isEmpty()) {
