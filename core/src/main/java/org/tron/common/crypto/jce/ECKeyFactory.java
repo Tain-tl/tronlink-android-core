@@ -60,7 +60,12 @@ public final class ECKeyFactory {
                 return keyFactory;
             } catch (NoSuchAlgorithmException e) {
                 LogUtils.e(e);
-                throw new AssertionError(algorithmAssertionMsg, ex);
+                // The inner failure e is the real root cause of the HUAWEI fallback
+                // failing; keep it as the cause and only suppress the outer ex so
+                // neither reason is lost when diagnosing the fallback path.
+                AssertionError error = new AssertionError(algorithmAssertionMsg, e);
+                error.addSuppressed(ex);
+                throw error;
             }
         }
     }
