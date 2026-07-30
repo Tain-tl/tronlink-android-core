@@ -69,3 +69,9 @@
   [-2^(n-1), 2^(n-1)-1]). Accepted: same rule as upstream web3j IntType; keep
   parity, do not tighten signed bounds. Scan report 2026-07-27.
   Location: IntType.isValidBitCount; FixedPointType.isValidBitCount
+
+- S-04 (MEDIUM): Bouncy Castle 1.69 ASN.1 OID DoS (CVE-2025-8885) reachable via
+  public ECKey.verify(byte[],byte[],byte[]) → decodeFromDER. Accepted: upgrade
+  has wide crypto regression surface; verify usually sees wallet-bounded DER.
+  Scan report 2026-07-27.
+  Location: core/build.gradle bcprov-jdk15on:1.69; ECKey.verify / decodeFromDER
