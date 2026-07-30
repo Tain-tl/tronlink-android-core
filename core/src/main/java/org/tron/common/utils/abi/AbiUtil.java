@@ -272,6 +272,7 @@ public class AbiUtil {
     static class CoderNumber extends Coder {
 
         @Override
+        // accepted: [Q-03] soft-coerce + truncate decimals for ABI ints; strict fail breaks existing UI/DApp paths. Scan 0727.
         byte[] encode(String value) {
             value = DecimalUtils.toString(DecimalUtils.toBigDecimal(value));
             if (!AddressUtil.isEmpty(value) && value.contains("."))
@@ -348,6 +349,7 @@ public class AbiUtil {
     static class CoderBool extends Coder {
 
         @Override
+        // accepted: [Q-03] non-true/1 bool strings encode as false for UI compatibility. Scan 0727.
         byte[] encode(String value) {
             if (value.equals("true") || value.equals("1")) {
                 return new DataWord(1).getData();

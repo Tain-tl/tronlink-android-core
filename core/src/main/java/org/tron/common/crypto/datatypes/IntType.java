@@ -44,6 +44,7 @@ public abstract class IntType extends NumericType {
         return bitSize % 8 == 0 && bitSize > 0 && bitSize <= MAX_BIT_LENGTH;
     }
 
+    // accepted: [Q-06] same as web3j; no signed min/max
     private static boolean isValidBitCount(int bitSize, BigInteger value) {
         if (value.bitLength() <= bitSize) {
             return true;

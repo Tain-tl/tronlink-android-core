@@ -43,6 +43,7 @@ public abstract class FixedPointType extends NumericType {
         return mBitSize % 8 == 0 && nBitSize % 8 == 0 && bitSize > 0 && bitSize <= MAX_BIT_LENGTH;
     }
 
+    // accepted: [Q-06] same as web3j; no signed min/max
     private static boolean isValidBitCount(int mBitSize, int nBitSize, BigInteger value) {
         // bitLength() is the numeric width; bitCount() only counts set bits and
         // would accept arbitrarily large values such as 2^300.

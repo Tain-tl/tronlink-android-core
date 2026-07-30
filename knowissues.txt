@@ -56,3 +56,16 @@
   on oversized input. Accepted: no in-repo callers (Numeric.toBytesPadded used instead);
   helper robustness only, no asset/signing path. Scan report 2026-07-21.
   Location: org/tron/common/utils/ByteArray.java toBytesPadded
+
+## Scan report 2026-07-27 (jacky)
+
+- Q-03 (MAJOR): ABI scalar illegal values soft-coerced (DecimalUtils→0, CoderNumber
+  truncates decimals, CoderBool non-true/1→false). Accepted: strict parse breaks
+  existing UI/DApp amount input paths; keep soft coerce + one-line accepted comments.
+  Scan report 2026-07-27.
+  Location: DecimalUtils.toBigDecimal; AbiUtil.CoderNumber/CoderBool.encode
+
+- Q-06 (MAJOR): Signed Int/Fixed range uses bitLength()<=bitSize (off-by-one vs
+  [-2^(n-1), 2^(n-1)-1]). Accepted: same rule as upstream web3j IntType; keep
+  parity, do not tighten signed bounds. Scan report 2026-07-27.
+  Location: IntType.isValidBitCount; FixedPointType.isValidBitCount
