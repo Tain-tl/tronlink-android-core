@@ -9,6 +9,7 @@ import org.junit.Test;
 import org.tron.common.crypto.ECKey;
 import org.tron.protos.Protocol;
 import org.tron.protos.contract.BalanceContract;
+import org.tron.protos.contract.MarketContract;
 import org.tron.protos.contract.SmartContractOuterClass;
 
 public class TransactionUtilsHashTest {
@@ -59,6 +60,34 @@ public class TransactionUtilsHashTest {
                 .build();
 
         Assert.assertArrayEquals(owner.toByteArray(), TransactionUtils.getOwner(contract));
+    }
+
+    @Test
+    public void getOwner_supportsMarketContracts() {
+        ByteString owner = ByteString.copyFrom(Hex.decode("41a0abd659056697b68feeed0d4bcab3752c01a0f9"));
+        MarketContract.MarketSellAssetContract sell =
+                MarketContract.MarketSellAssetContract.newBuilder()
+                        .setOwnerAddress(owner)
+                        .build();
+        MarketContract.MarketCancelOrderContract cancel =
+                MarketContract.MarketCancelOrderContract.newBuilder()
+                        .setOwnerAddress(owner)
+                        .build();
+
+        Assert.assertArrayEquals(
+                owner.toByteArray(),
+                TransactionUtils.getOwner(
+                        Protocol.Transaction.Contract.newBuilder()
+                                .setType(Protocol.Transaction.Contract.ContractType.MarketSellAssetContract)
+                                .setParameter(Any.pack(sell))
+                                .build()));
+        Assert.assertArrayEquals(
+                owner.toByteArray(),
+                TransactionUtils.getOwner(
+                        Protocol.Transaction.Contract.newBuilder()
+                                .setType(Protocol.Transaction.Contract.ContractType.MarketCancelOrderContract)
+                                .setParameter(Any.pack(cancel))
+                                .build()));
     }
 
     private static Protocol.Transaction createTransferTransaction() {

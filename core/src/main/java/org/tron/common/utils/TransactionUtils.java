@@ -41,6 +41,7 @@ import org.tron.protos.contract.AccountContract;
 import org.tron.protos.contract.AssetIssueContractOuterClass;
 import org.tron.protos.contract.BalanceContract;
 import org.tron.protos.contract.ExchangeContract;
+import org.tron.protos.contract.MarketContract;
 import org.tron.protos.contract.ProposalContract;
 import org.tron.protos.contract.ShieldContract;
 import org.tron.protos.contract.SmartContractOuterClass;
@@ -230,6 +231,12 @@ public class TransactionUtils {
                 case UpdateSettingContract:
                     owner = unpackContract(contract, SmartContractOuterClass.UpdateSettingContract.class).getOwnerAddress();
                     break;
+                case MarketSellAssetContract:
+                    owner = unpackContract(contract, MarketContract.MarketSellAssetContract.class).getOwnerAddress();
+                    break;
+                case MarketCancelOrderContract:
+                    owner = unpackContract(contract, MarketContract.MarketCancelOrderContract.class).getOwnerAddress();
+                    break;
 
                 default:
                     return null;
@@ -365,7 +372,7 @@ public class TransactionUtils {
      * @return
      */
     public static byte[] getMessageHash(String unsign) {
-        unsign = unsign.replaceFirst("0x", "");
+        unsign = Numeric.cleanHexPrefix(unsign);
         byte[] bytes;
         if (AddressUtil.isHexString(unsign)) {
             bytes = ByteArray.fromHexString(unsign);
@@ -430,7 +437,7 @@ public class TransactionUtils {
         if (AddressUtil.isEmpty(message, address, signature)) return false;
 
         try {
-            signature = signature.replaceFirst("0x", "");
+            signature = Numeric.cleanHexPrefix(signature);
             byte[] signatureBytes;
 
             if (AddressUtil.isHexString(signature)) {
@@ -479,11 +486,12 @@ public class TransactionUtils {
     }
 
     public static Transaction setTimestamp(Transaction transaction, long timestamp) {
-        // Timestamp is serialized in raw_data; changing this behavior changes the transaction hash.
         long currentTime = System.currentTimeMillis();//*1000000 + System.nanoTime()%1000000;
         Transaction.Builder builder = transaction.toBuilder();
         Transaction.raw.Builder rowBuilder = transaction.getRawData()
                 .toBuilder();
+        // accepted: [Q-02] Preserve legacy timestamp behavior because changing serialized
+        // raw_data changes transaction hashes and signing inputs. Scan report 2026-07-29.
         if (timestamp != 0) rowBuilder.setTimestamp(currentTime);
         builder.setRawData(rowBuilder.build());
         return builder.build();

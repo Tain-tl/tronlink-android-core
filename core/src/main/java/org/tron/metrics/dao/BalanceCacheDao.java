@@ -34,8 +34,10 @@ public interface BalanceCacheDao {
 
     @Query("UPDATE balance_cache SET updated = 0 WHERE id = :id "
             + "AND ((trx_balance IS NULL AND :trxBalance IS NULL) OR trx_balance = :trxBalance) "
-            + "AND ((usdt_balance IS NULL AND :usdtBalance IS NULL) OR usdt_balance = :usdtBalance)")
-    void clearUpdatedIfUnchanged(long id, String trxBalance, String usdtBalance);
+            + "AND ((usdt_balance IS NULL AND :usdtBalance IS NULL) OR usdt_balance = :usdtBalance) "
+            + "AND ((usd_balance IS NULL AND :usdBalance IS NULL) OR usd_balance = :usdBalance)")
+    void clearUpdatedIfUnchanged(
+            long id, String trxBalance, String usdtBalance, String usdBalance);
 
     @Query("DELETE FROM balance_cache WHERE day != :dayNow AND updated = 0")
     void deleteStaleUploaded(String dayNow);
@@ -53,7 +55,11 @@ public interface BalanceCacheDao {
             if (snapshot.getId() == null) {
                 continue;
             }
-            clearUpdatedIfUnchanged(snapshot.getId(), snapshot.getTrxBalance(), snapshot.getUsdtBalance());
+            clearUpdatedIfUnchanged(
+                    snapshot.getId(),
+                    snapshot.getTrxBalance(),
+                    snapshot.getUsdtBalance(),
+                    snapshot.getUsdBalance());
         }
         deleteStaleUploaded(dayNow);
     }

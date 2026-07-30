@@ -75,3 +75,11 @@
   has wide crypto regression surface; verify usually sees wallet-bounded DER.
   Scan report 2026-07-27.
   Location: core/build.gradle bcprov-jdk15on:1.69; ECKey.verify / decodeFromDER
+
+Q-14 (scan 2026-07-29): Accepted without behavior changes. Bip32ECKeyPair and
+  ABI Array remain aligned with LFDT-web3j upstream. ECKey cached byte getters and
+  the legacy public BIP39 word array retain their existing API behavior to avoid
+  crypto, ABI, and source-compatibility regressions.
+Q-02 (scan 2026-07-29): TransactionUtils.setTimestamp keeps its legacy behavior.
+  Changing timestamp selection would alter serialized raw_data, transaction hashes, and
+  signing inputs, so the compatibility/regression risk is higher than accepting the finding.

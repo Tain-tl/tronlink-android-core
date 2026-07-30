@@ -5,11 +5,16 @@ import org.apache.commons.lang3.ArrayUtils;
 import org.bouncycastle.crypto.OutputLengthException;
 import org.bouncycastle.util.Arrays;
 import org.bouncycastle.util.encoders.Hex;
+import org.tron.common.crypto.FunctionReturnDecoder;
+import org.tron.common.crypto.TypeReference;
+import org.tron.common.crypto.datatypes.DynamicArray;
 import org.tron.config.Parameter;
 import org.tron.protos.contract.SmartContractOuterClass.SmartContract.ABI;
 import org.tron.walletserver.AddressUtil;
 
 import java.math.BigInteger;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -75,9 +80,6 @@ public class TriggerLoad {
     public static Map<String, String> parseTriggerDataByFun(byte[] data, String fun) {
         Map<String, String> map = new LinkedHashMap<>();
         try {
-            if (ArrayUtils.isEmpty(data)) {
-                return map;
-            }
             if (AddressUtil.isEmpty(fun) || !fun.contains("(") || !fun.contains(")")) return map;
 
             fun = fun.substring(fun.indexOf("(") + 1, fun.indexOf(")"));
@@ -92,6 +94,9 @@ public class TriggerLoad {
                     && list.size() == 1
                     && list.get(0).contains("[]")) {
                 return parseDataByArray(data, fun);
+            }
+            if (ArrayUtils.isEmpty(data)) {
+                return map;
             }
             try {
                 // this one starts from the first position.
@@ -123,27 +128,89 @@ public class TriggerLoad {
 
     }
 
-    //TODO temporary
-    //Handling the return value is a single case of an array (uint256[]), does not handle complex data types ,like（string,uint256[]）(string,uint256[],string)
     private static Map<String, String> parseDataByArray(byte[] data, String typeStr) {
         Map<String, String> map = new LinkedHashMap<>();
         try {
-            if (typeStr.contains(("[]"))) {
-                String typeSub = typeStr.substring(0, typeStr.indexOf("["));
-                int length = (int) Math.ceil((double) data.length / DATAWORD_UNIT_SIZE);
-
-                for (int i = 0; i < length; i++) {
-                    String str = parseDataBytes(data, typeSub, i);
-                    map.put("" + i, str);
-                }
+            if (!Pattern.matches("^[A-Za-z][A-Za-z0-9]*\\[\\]$", typeStr)) {
+                return map;
             }
+            String elementType = typeStr.substring(0, typeStr.length() - 2);
+            if (basicType(elementType) == Type.UNKNOWN) {
+                return map;
+            }
+
+            // A single dynamic ABI argument points to its value immediately after the head word.
+            int arrayOffset = intValueExact(subBytes(data, 0, DATAWORD_UNIT_SIZE));
+            if (arrayOffset != DATAWORD_UNIT_SIZE) {
+                return map;
+            }
+
+            List<org.tron.common.crypto.datatypes.Type> decoded =
+                    decodeArrayWithWeb3j(data, typeStr);
+            if (decoded.size() != 1 || !(decoded.get(0) instanceof DynamicArray)) {
+                return map;
+            }
+            DynamicArray<?> array = (DynamicArray<?>) decoded.get(0);
+            map.put("0", formatArrayValues(array.getValue(), basicType(elementType)));
+            return map;
         } catch (Exception e) {
             LogUtils.e(e);
+            return map;
         }
+    }
 
-        return map;
+    @SuppressWarnings("unchecked")
+    private static List<org.tron.common.crypto.datatypes.Type> decodeArrayWithWeb3j(
+            byte[] data, String typeStr) {
+        try {
+            TypeReference<org.tron.common.crypto.datatypes.Type> typeReference =
+                    (TypeReference<org.tron.common.crypto.datatypes.Type>)
+                            TypeReference.makeTypeReference(typeStr);
+            return FunctionReturnDecoder.decode(
+                    Hex.toHexString(data), Collections.singletonList(typeReference));
+        } catch (Exception e) {
+            LogUtils.e(e);
+            return Collections.emptyList();
+        }
+    }
 
-
+    private static String formatArrayValues(
+            List<?> values, Type elementKind) {
+        List<String> displayValues = new ArrayList<>(values.size());
+        for (Object value : values) {
+            org.tron.common.crypto.datatypes.Type abiValue =
+                    (org.tron.common.crypto.datatypes.Type) value;
+            Object nativeValue = abiValue.getValue();
+            if (elementKind == Type.ADDRESS) {
+                byte[] address = Hex.decode(
+                        org.tron.common.bip32.Numeric.cleanHexPrefix(String.valueOf(nativeValue)));
+                byte[] last20Bytes = Arrays.copyOfRange(
+                        address, address.length - 20, address.length);
+                displayValues.add(AddressUtil.encode58Check(convertToTronAddress(last20Bytes)));
+            } else if (nativeValue instanceof byte[]) {
+                String hexValue = Hex.toHexString((byte[]) nativeValue);
+                displayValues.add(elementKind == Type.BYTES ? "0x" + hexValue : hexValue);
+            } else {
+                displayValues.add(String.valueOf(nativeValue));
+            }
+        }
+        if (elementKind != Type.STRING) {
+            return displayValues.toString();
+        }
+        StringBuilder result = new StringBuilder("[");
+        for (int i = 0; i < displayValues.size(); i++) {
+            if (i > 0) {
+                result.append(", ");
+            }
+            result.append('"')
+                    .append(displayValues.get(i)
+                            .replace("\\", "\\\\")
+                            .replace("\"", "\\\"")
+                            .replace("\n", "\\n")
+                            .replace("\r", "\\r"))
+                    .append('"');
+        }
+        return result.append(']').toString();
     }
 
     private static String parseDataBytes(byte[] data, String typeStr, int index) {
@@ -215,10 +282,10 @@ public class TriggerLoad {
     }
 
     private static byte[] subBytes(byte[] src, int start, int length) {
-        if (ArrayUtils.isEmpty(src) || start >= src.length || length < 0) {
+        if (ArrayUtils.isEmpty(src) || start < 0 || start > src.length || length < 0) {
             throw new OutputLengthException("data start:" + start + ", length:" + length);
         }
-        if (start + length > src.length) {
+        if (length > src.length - start) {
             throw new OutputLengthException("not enough bytes");
         }
         byte[] dst = new byte[length];

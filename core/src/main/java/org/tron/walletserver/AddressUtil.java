@@ -186,7 +186,7 @@ public class AddressUtil {
      * @return
      */
     public static boolean isHexString(String hexString) {
-        if (TextUtils.isEmpty(hexString)) return false;
+        if (hexString == null || hexString.isEmpty()) return false;
         String regex = "^[A-Fa-f0-9]+$";
         if (hexString.matches(regex)) {
             return true;
