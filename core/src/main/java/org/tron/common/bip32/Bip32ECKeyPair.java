@@ -154,6 +154,14 @@ public class Bip32ECKeyPair extends ECKeyPair {
         return Hash.sha256hash160(getPublicKeyPoint().getEncoded(true));
     }
 
+    // accepted (Q-07): this always derives the public point from the private key and ignores
+    // any stored public key. A public-key-only (watch-only / xpub) Bip32ECKeyPair has a null
+    // private key, so getPublicKeyPoint() — and hence the non-private deriveChildKey branch —
+    // would NPE, and hardened derivation from such a key is not rejected. Left as-is: every
+    // Bip32ECKeyPair in this codebase is built from a private key (see the create()/
+    // generateKeyPair() factories) and there is no watch-only derivation path, so the null
+    // case is unreachable in practice. Documented as a known limitation rather than adding a
+    // public-key point-decode path to a shipping wallet.
     public ECPoint getPublicKeyPoint() {
         if (publicKeyPoint == null) {
             publicKeyPoint = Sign.publicPointFromPrivate(getPrivateKey());
