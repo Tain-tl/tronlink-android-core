@@ -49,6 +49,7 @@ import org.tron.protos.contract.VoteAssetContractOuterClass;
 import org.tron.protos.contract.WitnessContract;
 import org.tron.walletserver.AddressUtil;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
 
@@ -315,17 +316,28 @@ public class TransactionUtils {
         return transaction;
     }
 
+    // Q-01: single normalization shared by sign(String) and verifyMessage so they round-trip.
+    // A leading "0x" marks a hex-encoded payload ONLY when the remainder is valid hex: strip
+    // it and decode to raw bytes. Any other input is signed verbatim as UTF-8 text — including
+    // a plain string that merely starts with "0x" but is not hex (its "0x" is kept, not stripped).
+    // Both sign and verify then apply the V2 (actual-length) prefix.
+    private static byte[] normalizeMessageBytes(String message) {
+        if (message.startsWith("0x")) {
+            String body = message.substring(2);
+            if (AddressUtil.isHexString(body)) {
+                return ByteArray.fromHexString(body);
+            }
+        }
+        return message.getBytes(StandardCharsets.UTF_8);
+    }
+
     public static String sign(String unSign, ECKey myKey) {
         if (unSign == null || unSign.isEmpty())
             throw new IllegalArgumentException("unSign must not be empty");
-        unSign = unSign.replaceFirst("0x", "");
-        byte[] bytes;
-        if (AddressUtil.isHexString(unSign)) {
-            bytes = ByteArray.fromHexString(unSign);
-        } else {
-            bytes = ByteArray.fromString(unSign);
-        }
-        Sign.SignatureData signatureData = Sign.signPrefixedMessage(bytes, ECKeyPair.create(myKey.getPrivKey()));
+        // Q-01: use the same normalization + V2 prefix as verifyMessage so that
+        // verifyMessage(unSign, sign(unSign, key), addr) round-trips.
+        byte[] bytes = normalizeMessageBytes(unSign);
+        Sign.SignatureData signatureData = Sign.signPrefixedMessageV2(bytes, ECKeyPair.create(myKey.getPrivKey()));
         StringBuffer sb = new StringBuffer();
         return sb.append("0x").append(ByteArray.toHexString(signatureData.getR())).append(ByteArray.toHexString(signatureData.getS())).append(ByteArray.toHexString(new byte[]{signatureData.getV()})).toString();
     }
@@ -418,7 +430,6 @@ public class TransactionUtils {
         if (AddressUtil.isEmpty(message, address, signature)) return false;
 
         try {
-            message = message.replaceFirst("0x", "");
             signature = signature.replaceFirst("0x", "");
             byte[] signatureBytes;
 
@@ -444,7 +455,7 @@ public class TransactionUtils {
             }
             ECKey.ECDSASignature ecdsaSignature = ECKey.ECDSASignature.fromComponents(r, s, v);
             // use v2
-            byte[] bytes = ECKey.signatureToAddress(Sign.getPrefixedMessageHashV2(message.getBytes()), ecdsaSignature);
+            byte[] bytes = ECKey.signatureToAddress(Sign.getPrefixedMessageHashV2(normalizeMessageBytes(message)), ecdsaSignature);
             if (ArrayUtils.isEmpty(bytes)) return false;
 
             return Arrays.equals(bytes, AddressUtil.decode58Check(address));
