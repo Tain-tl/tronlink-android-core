@@ -304,6 +304,13 @@ public class AbiUtil {
         }
     }
 
+    // accepted (Q-10): fixed-size bytesN is not strictly validated. The paramTypeBytes regex
+    // accepts any N (including bytes0 and bytes33+), N is never parsed, and encode() places
+    // whatever hex value it is given left-aligned into a 32-byte word without requiring the
+    // value to be exactly N bytes; a value longer than 32 bytes throws
+    // ArrayIndexOutOfBoundsException from the arraycopy rather than a typed input error.
+    // Accepted as a known limitation for now; not tightened to avoid a behavior change on the
+    // ABI encoding path of a shipping wallet.
     static class CoderFixedBytes extends Coder {
 
         @Override
