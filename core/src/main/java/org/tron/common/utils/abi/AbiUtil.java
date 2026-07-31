@@ -129,6 +129,13 @@ public class AbiUtil {
         CoderArray(String arrayType, int length) {
             this.elementType = arrayType;
             this.length = length;
+            // accepted (Q-04): an array is marked dynamic only when it is variable-length
+            // (length == -1). A fixed-length array whose element type is dynamic — e.g.
+            // string[2], bytes[2], bytes[][2] — is dynamic per the ABI spec but is treated as
+            // static here, so pack() inlines it instead of emitting a head/tail offset and the
+            // offsets of the following parameters are wrong. The sibling CoderTuple already
+            // handles this via isDynamicType(); CoderArray is left as-is and documented as a
+            // known limitation rather than changing ABI encoding output on a shipping wallet.
             this.dynamic = (length == -1);
         }
 
