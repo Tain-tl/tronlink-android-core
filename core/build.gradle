@@ -7,6 +7,10 @@ plugins {
 group = 'org.tronlink'
 
 android {
+    // accepted (Q-13): compileSdk 36 is ahead of what AGP 8.5.1 was officially tested against
+    // (34), which only emits a benign warning. Moving to an AGP/Gradle combo that supports
+    // compileSdk 36 is deferred to a separate toolchain-upgrade task (see the AGP classpath note
+    // in the root build.gradle).
     compileSdk 36
     namespace = "org.tron"
     defaultConfig {
@@ -19,12 +23,6 @@ android {
         aarMetadata {
             minCompileSdk = 21
         }
-    }
-    dexOptions {
-        javaMaxHeapSize "4g"
-        preDexLibraries = false
-        additionalParameters += '--multi-dex'
-        additionalParameters += '--set-max-idx-number=35000'
     }
     buildTypes {
         release {

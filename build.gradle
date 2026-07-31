@@ -7,6 +7,10 @@ buildscript {
         mavenCentral()
     }
     dependencies {
+        // accepted (Q-13): AGP 8.5.1 was tested up to compileSdk 34 while core uses compileSdk 36
+        // (benign warning), and it still surfaces Gradle 9.0 deprecations from AGP/plugin internals.
+        // Upgrading AGP + Gradle wrapper + protobuf plugin to a compileSdk-36-supported,
+        // Gradle-9-clean baseline is deferred to a dedicated toolchain-upgrade effort.
         classpath 'com.android.tools.build:gradle:8.5.1'
         classpath "com.google.protobuf:protobuf-gradle-plugin:0.9.1"
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
