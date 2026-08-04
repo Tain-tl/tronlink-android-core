@@ -453,6 +453,14 @@ public class StructuredDataEncoder {
                     });
                     value = objects;
                 }
+                // accepted (S-01): multidimensional arrays are flattened and hashed ONCE,
+                // instead of hashing each nesting level separately as EIP-712 reference
+                // implementations (ethers.js / eth-sig-util) do. Structurally different
+                // values of the same declared type — e.g. uint256[][] [[1,2],[3,4]] vs
+                // [[1,2,3,4]] — therefore share one field hash, and multidimensional
+                // hashes do not interop with standard verifiers. This mirrors upstream
+                // web3j StructuredDataEncoder behavior and is kept as-is on a shipping
+                // wallet; 1-dimensional arrays (the practical dapp case) are unaffected.
                 List<Object> arrayItems = getArrayItems(field, value);
                 ByteArrayOutputStream concatenatedArrayEncodingBuffer = new ByteArrayOutputStream();
 

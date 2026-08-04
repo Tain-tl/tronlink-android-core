@@ -129,3 +129,10 @@ Q-02 (scan 2026-07-29): TransactionUtils.setTimestamp keeps its legacy behavior.
   safely requires duplicate reconciliation plus atomic insert-or-query migration semantics;
   the repository-wide lock covers normal in-process app access.
   Location: org/tron/metrics/bean/UIdMappingEntity.java
+
+- S-01 (HIGH): EIP-712 multidimensional arrays are flattened and hashed once, losing
+  nesting boundaries, so structurally different values of one declared type can share a
+  field hash and multidimensional hashes do not match standard verifiers. Accepted:
+  mirrors upstream web3j StructuredDataEncoder behavior; 1-dimensional arrays (the
+  practical dapp case) are encoded per spec. Scan report 2026-08-03.
+  Location: org/tron/common/crypto/StructuredDataEncoder.java encodeData
