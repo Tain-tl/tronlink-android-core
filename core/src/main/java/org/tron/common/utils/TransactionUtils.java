@@ -372,10 +372,16 @@ public class TransactionUtils {
      * @return
      */
     public static byte[] getMessageHash(String unsign) {
-        unsign = Numeric.cleanHexPrefix(unsign);
+        // S-03: a leading "0x" is a hex-payload marker only. When the remainder (or the
+        // bare string, for legacy no-prefix callers) is valid hex, hash the decoded
+        // bytes; otherwise hash the ORIGINAL text verbatim as UTF-8 — never a stripped
+        // variant, so visible text like "0xhello" can no longer share a Ledger hash
+        // with "hello". Splitting text vs hex payloads into separate APIs would need
+        // app-side call sites to change and is intentionally out of scope here.
+        String body = Numeric.cleanHexPrefix(unsign);
         byte[] bytes;
-        if (AddressUtil.isHexString(unsign)) {
-            bytes = ByteArray.fromHexString(unsign);
+        if (AddressUtil.isHexString(body)) {
+            bytes = ByteArray.fromHexString(body);
         } else {
             bytes = ByteArray.fromString(unsign);
         }
