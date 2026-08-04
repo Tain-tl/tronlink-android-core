@@ -218,6 +218,7 @@ public class TriggerLoad {
         try {
             byte[] startBytes = subBytes(data, index * DATAWORD_UNIT_SIZE, DATAWORD_UNIT_SIZE);
             Type type = basicType(typeStr);
+            // accepted: [Q-04] Negative intN is uncommon and bytesN padding is display-only; calldata, signing, broadcast, and execution are unchanged.
             if (type == Type.INT_NUMBER) {
                 // maximum value：ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
                 // 115792089237316195423570985008687907853269984665640564039457584007913129639935

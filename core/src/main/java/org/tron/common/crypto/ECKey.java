@@ -1050,6 +1050,7 @@ public class ECKey implements Serializable, SignInterface {
 
     ECKey ecKey = (ECKey) o;
 
+    // accepted: [Q-16] No in-repo equality or collection callers exist; changing public crypto equality semantics has higher compatibility risk.
     if (privKey != null && !privKey.equals(ecKey.privKey)) {
       return false;
     }

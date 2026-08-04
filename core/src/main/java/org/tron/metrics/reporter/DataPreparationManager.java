@@ -30,6 +30,7 @@ public class DataPreparationManager {
      */
     public static DataPreparationResult prepareUploadData(IBalanceRepository balanceRepository, ITransactionRepository transactionCache) {
         try {
+            // accepted: [Q-09] This metrics-only path retains rows on failure; safe paging needs coordinated per-batch acknowledgement.
             List<BalanceCacheEntity> balanceList = balanceRepository.queryData();
             List<TransactionCacheEntity> transactionList = transactionCache.queryData();
 

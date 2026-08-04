@@ -34,6 +34,7 @@ public abstract class MetricsDatabase extends RoomDatabase {
 
     public static synchronized void init(Context context, String evn) {
         if (INSTANCE == null) {
+            // accepted: [S-08] App sandboxing and allowBackup=false protect this metrics-only cache; encryption needs host-managed keys and migration.
             INSTANCE = Room.databaseBuilder(
                             context.getApplicationContext(),
                             MetricsDatabase.class,

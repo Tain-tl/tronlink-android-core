@@ -12,6 +12,7 @@ import lombok.Data;
 public class UIdMappingEntity {
     @PrimaryKey(autoGenerate = true)
     private Long id;
+    // accepted: [Q-13] Uniqueness needs duplicate reconciliation and atomic migration; the repository lock covers normal app access.
     @ColumnInfo(name = "address")
     private String address;
     @ColumnInfo(name = "uid")

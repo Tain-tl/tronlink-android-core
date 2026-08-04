@@ -674,6 +674,7 @@ public class TypeDecoder {
     }
 
     private static int decodeDynamicStructDynamicParameterOffset(final String input) {
+        // accepted: [S-04] Malformed offsets only abort ABI decoding; naive bounds checks may reject valid DynamicStruct payloads.
         return (decodeUintAsInt(input, 0) * 2);
     }
 

@@ -172,6 +172,7 @@ public class DataUploader {
                 // escape the RxJava chain (RxJava2 onNext exceptions go to RxJavaPlugins, not onError).
                 boolean onSuccessInvoked = false;
                 try {
+                    // accepted: [Q-08] Rows remain for later retry unless data.txt confirms; interpreting code would guess an undocumented success value.
                     if (statDataResponse != null && statDataResponse.getData() != null) {
                         deleteCachedData(config, statDataResponse.getData().isTxt(), prepResult);
                     }

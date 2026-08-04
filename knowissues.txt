@@ -83,3 +83,49 @@ Q-14 (scan 2026-07-29): Accepted without behavior changes. Bip32ECKeyPair and
 Q-02 (scan 2026-07-29): TransactionUtils.setTimestamp keeps its legacy behavior.
   Changing timestamp selection would alter serialized raw_data, transaction hashes, and
   signing inputs, so the compatibility/regression risk is higher than accepting the finding.
+
+## Scan report 2026-08-03 (slash)
+
+- S-04 (MEDIUM): ABI byte offsets can overflow when converted to hex-character indexes.
+  Accepted: malformed RPC or contract return data can abort ABI decoding but cannot mutate
+  assets or sign/broadcast; a defensive fix needs caller-contract and DynamicStruct-safe
+  handling. Scan report 2026-08-03.
+  Locations: org/tron/common/crypto/TypeDecoder.java;
+  org/tron/common/crypto/DefaultFunctionReturnDecoder.java
+
+- Q-01 (MAJOR): TransactionUtils.setTimestamp retains its legacy parameter behavior.
+  Accepted: network expiration validation limits practical impact, while changing raw_data,
+  transaction IDs, and signing inputs has higher compatibility risk. Scan report 2026-08-03.
+  Location: org/tron/common/utils/TransactionUtils.java setTimestamp
+
+- Q-04 (MAJOR): TriggerLoad displays signed intN words as unsigned values and retains ABI
+  padding when displaying bytesN. Accepted: negative intN parameters are uncommon and the
+  bytesN difference is display-only; calldata, signing, broadcasting, and on-chain asset
+  execution remain unchanged. Scan report 2026-08-03.
+  Location: org/tron/common/utils/TriggerLoad.java parseDataBytes
+
+- Q-16 (MINOR): ECKey.equals retains asymmetric private/public-only comparison behavior.
+  Accepted: there are no in-repo equality or collection callers, while changing the public
+  crypto API equality semantics has higher compatibility risk. Scan report 2026-08-03.
+  Location: org/tron/common/crypto/ECKey.java equals
+
+- S-08 (LOW): Metrics address, UID, balance, and transaction profile remain plaintext in
+  the Room database. Accepted: the app sandbox and allowBackup=false protect this
+  metrics-only cache; encryption requires host-managed keys and a migration.
+  Location: org/tron/metrics/dao/MetricsDatabase.java
+
+- Q-08 (MAJOR): Metrics upload does not interpret the response business code. Accepted:
+  cache deletion already requires the existing data.txt confirmation, while the backend
+  success-code contract is not defined in this repository and guessing it could prevent
+  legitimate acknowledgements.
+  Location: org/tron/metrics/reporter/DataUploader.java
+
+- Q-09 (MAJOR): Metrics upload prepares all updated rows in one batch. Accepted: paging
+  requires coordinated per-batch acknowledgement semantics across DAO, repositories, and
+  uploader; current failures retain the metrics-only cache for a later retry.
+  Location: org/tron/metrics/reporter/DataPreparationManager.java
+
+- Q-13 (MINOR): uid_mapping has no database unique index on address. Accepted: adding one
+  safely requires duplicate reconciliation plus atomic insert-or-query migration semantics;
+  the repository-wide lock covers normal in-process app access.
+  Location: org/tron/metrics/bean/UIdMappingEntity.java

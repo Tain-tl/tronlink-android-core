@@ -165,6 +165,7 @@ public class DefaultFunctionReturnDecoder extends FunctionReturnDecoder {
                 || Utf8String.class.isAssignableFrom(type)
                 || DynamicArray.class.isAssignableFrom(type)
                 || hasDynamicOffsetInStaticArray(typeReference, offset)) {
+            // accepted: [S-04] Malformed offsets only abort ABI decoding; stricter exceptions may still escape public decoder callers.
             return TypeDecoder.decodeUintAsInt(input, offset) << 1;
         } else {
             return offset;

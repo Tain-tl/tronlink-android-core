@@ -490,8 +490,7 @@ public class TransactionUtils {
         Transaction.Builder builder = transaction.toBuilder();
         Transaction.raw.Builder rowBuilder = transaction.getRawData()
                 .toBuilder();
-        // accepted: [Q-02] Preserve legacy timestamp behavior because changing serialized
-        // raw_data changes transaction hashes and signing inputs. Scan report 2026-07-29.
+        // accepted: [Q-01] Network expiration validation limits impact; changing raw_data, txids, and signing inputs has higher compatibility risk.
         if (timestamp != 0) rowBuilder.setTimestamp(currentTime);
         builder.setRawData(rowBuilder.build());
         return builder.build();
