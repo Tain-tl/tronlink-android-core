@@ -779,6 +779,11 @@ public class ECKey implements Serializable, SignInterface {
    *
    * @return 21-byte address
    */
+  // accepted (Q-15): returns the cached internal array; a caller mutating it poisons
+  // the address every later caller sees (same for getNodeId below and
+  // Bip32ECKeyPair.getChainCode). No in-repo caller mutates these, and switching to
+  // per-call clones changes reference semantics on a hot wallet API, so the exposure
+  // is documented instead of copied away.
   public byte[] getAddress() {
     if (pubKeyHash == null) {
       pubKeyHash = Hash.computeAddress(this.pub);
@@ -815,6 +820,7 @@ public class ECKey implements Serializable, SignInterface {
   }
 
   /** Generates the NodeID based on this key, that is the public key without first format byte */
+  // accepted (Q-15): exposes the cached internal array — see getAddress above.
   public byte[] getNodeId() {
     if (nodeId == null) {
       nodeId = pubBytesWithoutFormat(this.pub);

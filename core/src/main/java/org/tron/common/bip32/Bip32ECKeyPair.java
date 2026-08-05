@@ -143,6 +143,11 @@ public class Bip32ECKeyPair extends ECKeyPair {
     }
 
     public byte[] getChainCode() {
+        // accepted (Q-15): returns the internal chain code array, which is also the HMAC
+        // input for deriveChildKey — a caller mutating it corrupts every later child
+        // derivation from this node. The constructor already stores a private copy; the
+        // getter exposure is documented instead of cloned, consistent with
+        // ECKey.getAddress/getNodeId.
         return chainCode;
     }
 

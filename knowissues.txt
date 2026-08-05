@@ -152,3 +152,20 @@ Q-02 (scan 2026-07-29): TransactionUtils.setTimestamp keeps its legacy behavior.
   out-of-range element only yields a signature external verifiers reject. Scalar fields and
   bytesN[] elements already enforce their declared type. Scan report 2026-08-03.
   Location: org/tron/common/crypto/StructuredDataEncoder.java convertToEncodedItem
+
+- S-07 (LOW): KeyStoreUtils still leaves some zeroable secret copies to the GC: password
+  UTF-8 copies are passed inline to both KDF branches and never wiped, getKeyStore runs its
+  KDF before the try so a KDF failure skips the passwordBytes wipe, and decrypt /
+  getPrivateWithKeyStore drop plaintext private-key arrays without zeroing. Accepted:
+  outputs and exception semantics are unchanged; derivedKey/encryptKey wipes plus the app
+  sandbox remain the mitigation, consistent with the accepted S-A09 ECKey private-key copy
+  contract. Scan report 2026-08-03.
+  Location: org/tron/net/KeyStoreUtils.java getKeyStore/decryptToByte/decrypt
+
+- Q-15 (MINOR): Bip32ECKeyPair.getChainCode, ECKey.getAddress, and ECKey.getNodeId return
+  their internal/cached arrays, so a caller mutating the result poisons later child
+  derivations or the cached address/node id every subsequent caller sees. Accepted: no
+  in-repo caller mutates these, and switching to per-call clones changes reference
+  semantics on a hot wallet API. Scan report 2026-08-03.
+  Location: org/tron/common/bip32/Bip32ECKeyPair.java getChainCode;
+  org/tron/common/crypto/ECKey.java getAddress/getNodeId

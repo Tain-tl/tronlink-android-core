@@ -113,6 +113,14 @@ public class KeyStoreUtils {
 
     }
 
+    // accepted (S-07): some zeroable secret copies still outlive their use awaiting GC:
+    // the password UTF-8 copies passed inline to both KDF branches below are never
+    // wiped; getKeyStore runs its KDF before entering the try, so a KDF failure skips
+    // the finally wipe of passwordBytes; decrypt() drops the plaintext private-key
+    // array after ECKey.fromPrivate, and getPrivateWithKeyStore drops the
+    // getPrivKeyBytes() copy after hex-encoding. Restructuring every path into
+    // try/finally wipes is deferred; derivedKey/encryptKey wipes and the app sandbox
+    // remain the mitigation, consistent with the accepted S-A09 ECKey copy contract.
     private static byte[] decryptToByte(String password, WalletFile walletFile)
             throws CipherException {
 
