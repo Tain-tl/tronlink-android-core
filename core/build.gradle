@@ -14,7 +14,7 @@ android {
     compileSdk 36
     namespace = "org.tron"
     defaultConfig {
-        minSdk 21
+        minSdk 23   // Q-11: Room 2.8.4 requires API 23+; 21 was a false promise to consumers
         versionCode 14
         versionName "1.0.14"
         multiDexEnabled true
