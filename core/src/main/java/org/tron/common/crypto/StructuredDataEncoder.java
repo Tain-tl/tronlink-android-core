@@ -291,6 +291,14 @@ public class StructuredDataEncoder {
         try {
             if (baseType.toLowerCase(Locale.ROOT).startsWith("uint")
                     || baseType.toLowerCase(Locale.ROOT).startsWith("int")) {
+                // accepted (Q-07): array elements are hand-padded from the raw BigInteger
+                // without constructing the declared UintN/IntN, so no bit-width or sign
+                // check runs: uint8[] accepts 256 and uint*[] accepts negatives, producing
+                // hashes that standard verifiers (ethers.js / eth-sig-util) reject at
+                // construction and can never reproduce. Scalar fields and bytesN[] elements
+                // do enforce their declared type via AbiTypes construction. Mirrors upstream
+                // web3j StructuredDataEncoder; an out-of-range element only yields a
+                // signature external verifiers reject, so it is kept as-is.
                 BigInteger value = convertToBigInt(data);
                 if (value.signum() >= 0) {
                     hashBytes = Numeric.toBytesPadded(convertToBigInt(data), MAX_BYTE_LENGTH);

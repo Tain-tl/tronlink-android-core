@@ -57,6 +57,13 @@ public class AbiUtil {
         int end = methodSign.lastIndexOf(')');
         try {
             String typeString = methodSign.subSequence(start, end).toString();
+            // accepted (Q-03): the tuple branch slices by first-"tuple"/last-")" positions,
+            // so a leading tuple gains an empty type inserted before it, every parameter
+            // after the tuple is dropped, and multiple tuples merge into one token; only
+            // tuple-last signatures parse correctly. The broken shapes then fail fast in
+            // pack() (coder count/null mismatch) rather than producing calldata that
+            // mismatches the selector. Kept as-is on a shipping wallet instead of
+            // re-splitting signatures by parenthesis depth.
             if (typeString.contains("tuple")) {
                 int startTuple = typeString.indexOf("tuple");
                 int endTuple = typeString.lastIndexOf(")") + 1;

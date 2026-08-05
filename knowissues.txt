@@ -136,3 +136,19 @@ Q-02 (scan 2026-07-29): TransactionUtils.setTimestamp keeps its legacy behavior.
   mirrors upstream web3j StructuredDataEncoder behavior; 1-dimensional arrays (the
   practical dapp case) are encoded per spec. Scan report 2026-08-03.
   Location: org/tron/common/crypto/StructuredDataEncoder.java encodeData
+
+- Q-03 (MAJOR): AbiUtil.getTypes slices tuple signatures by first-"tuple"/last-")"
+  positions: a leading tuple gains an empty inserted type, parameters after the tuple are
+  dropped, and multiple tuples merge into one token; only tuple-last signatures parse
+  correctly. Accepted: the broken shapes fail fast in pack() instead of producing calldata
+  that mismatches the selector, and signature parsing on a shipping wallet is left
+  unchanged. Scan report 2026-08-03.
+  Location: org/tron/common/utils/abi/AbiUtil.java getTypes
+
+- Q-07 (MAJOR): EIP-712 integer array elements are hand-padded from the raw BigInteger
+  without constructing the declared UintN/IntN, so no bit-width or sign check runs (uint8[]
+  accepts 256, uint*[] accepts negatives) and the resulting hashes cannot be reproduced by
+  standard verifiers. Accepted: mirrors upstream web3j StructuredDataEncoder; an
+  out-of-range element only yields a signature external verifiers reject. Scalar fields and
+  bytesN[] elements already enforce their declared type. Scan report 2026-08-03.
+  Location: org/tron/common/crypto/StructuredDataEncoder.java convertToEncodedItem
