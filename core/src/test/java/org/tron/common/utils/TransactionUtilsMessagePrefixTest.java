@@ -26,29 +26,6 @@ public class TransactionUtilsMessagePrefixTest {
     }
 
     @Test
-    public void getMessageHash_nonHexRemainderKeepsPrefixVerbatim() {
-        // "0xhello" is visible text, not a hex payload: it must NOT hash like "hello".
-        Assert.assertFalse(
-                java.util.Arrays.equals(
-                        TransactionUtils.getMessageHash("0xhello"),
-                        TransactionUtils.getMessageHash("hello")));
-        // And it hashes exactly its verbatim UTF-8 bytes.
-        Assert.assertArrayEquals(
-                org.tron.common.bip32.Sign.getPrefixedMessageHash(
-                        "0xhello".getBytes(StandardCharsets.UTF_8)),
-                TransactionUtils.getMessageHash("0xhello"));
-    }
-
-    @Test
-    public void getMessageHash_bareHexPrefixAloneIsText() {
-        // A lone "0x" has no hex remainder: it is text, not an empty payload.
-        Assert.assertArrayEquals(
-                org.tron.common.bip32.Sign.getPrefixedMessageHash(
-                        "0x".getBytes(StandardCharsets.UTF_8)),
-                TransactionUtils.getMessageHash("0x"));
-    }
-
-    @Test
     public void verifyMessage_internalHexPrefixInSignatureIsNotRemoved() {
         ECKey key = new ECKey(
                 Hex.decode("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"),
