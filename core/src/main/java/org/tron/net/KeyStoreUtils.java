@@ -88,8 +88,26 @@ public class KeyStoreUtils {
     // on malformed keystore; non-blocking quality issue, import UI already fails closed.
     // Scan report 2026-07-14.
     public static String getPrivateWithKeyStore(String keyStore, String password) throws CipherException, IOException {
+        WalletFile walletFile = WalletFile.createGson().fromJson(keyStore, WalletFile.class);
+        ECKey ecKey = decrypt(password, walletFile);
+        validateAddressMatches(walletFile.getAddress(), ecKey);
+        return ByteArray.toHexString(ecKey.getPrivKeyBytes());
+    }
 
-        return ByteArray.toHexString(decrypt(password, WalletFile.createGson().fromJson(keyStore, WalletFile.class)).getPrivKeyBytes());
+    static void validateAddressMatches(String address, ECKey decryptedKey)
+            throws AddressMismatchException {
+        // Some third-party wallet keystores omit the optional address field. Keep those files
+        // importable for compatibility; all password, MAC and private-key checks still apply.
+        if (address == null || address.trim().isEmpty()) {
+            return;
+        }
+
+        byte[] declaredAddress = AddressUtil.decodeUnknownAddress(address);
+        if (declaredAddress == null
+                || decryptedKey == null
+                || !MessageDigest.isEqual(declaredAddress, decryptedKey.getAddress())) {
+            throw new AddressMismatchException();
+        }
     }
 
     // accepted: [Q-12] Same as getPrivateWithKeyStore — undeclared parse exceptions left as-is.

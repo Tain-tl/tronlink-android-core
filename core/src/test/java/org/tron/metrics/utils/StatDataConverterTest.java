@@ -11,7 +11,7 @@ import java.util.List;
 public class StatDataConverterTest {
 
     @Test
-    public void convertBalanceCacheToStatXData_formatsTrxAndUsdtReportNumbers() {
+    public void convertBalanceCacheToStatXData_formatsAllBalanceReportNumbers() {
         BalanceCacheEntity entity = new BalanceCacheEntity();
         entity.setUId("uid-1");
         entity.setIdType(0);
@@ -26,7 +26,7 @@ public class StatDataConverterTest {
         Assert.assertEquals(1, result.size());
         Assert.assertEquals("1230", result.get(0).getTrxBalance());
         Assert.assertEquals("0.1", result.get(0).getUsdtBalance());
-        Assert.assertEquals("99.999", result.get(0).getUsdBalance());
+        Assert.assertEquals("99.9", result.get(0).getUsdBalance());
     }
 
     @Test

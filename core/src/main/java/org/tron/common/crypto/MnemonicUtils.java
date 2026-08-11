@@ -26,6 +26,13 @@ public class MnemonicUtils {
     private static final int SEED_KEY_SIZE = 512;
     private static List<String> WORD_LIST = null;
 
+    /** Signals that an entropy source returned an unmistakably degenerate value. */
+    public static final class EntropyQualityException extends IllegalArgumentException {
+        private EntropyQualityException(String message) {
+            super(message);
+        }
+    }
+
     /**
      * The mnemonic must encode entropy in a multiple of 32 bits. With more entropy security is
      * improved but the sentence length increases. We refer to the initial entropy length as ENT.
@@ -168,6 +175,37 @@ public class MnemonicUtils {
         if (ent < 128 || ent > 256 || ent % 32 != 0) {
             throw new IllegalArgumentException("The allowed size of ENT is 128-256 bits of "
                     + "multiples of 32");
+        }
+    }
+
+    /**
+     * Rejects unmistakably degenerate output from an entropy source. This check is intended for
+     * newly generated wallet entropy only; callers converting existing entropy to a BIP-39
+     * mnemonic should use {@link #generateMnemonic(byte[])} directly because repeated-byte values
+     * are valid BIP-39 inputs.
+     *
+     * @param entropy entropy returned by the wallet's random source
+     * @throws IllegalArgumentException if the entropy length is not valid for BIP-39
+     * @throws EntropyQualityException if the entropy is all zeros or one repeated byte
+     */
+    public static void validateGeneratedEntropyQuality(byte[] entropy) {
+        validateEntropy(entropy);
+
+        int nonZeroBytes = 0;
+        int differencesFromFirstByte = 0;
+        byte firstByte = entropy[0];
+
+        for (byte value : entropy) {
+            nonZeroBytes |= value;
+            differencesFromFirstByte |= value ^ firstByte;
+        }
+
+        if (nonZeroBytes == 0) {
+            throw new EntropyQualityException("Generated entropy must not be all zeros");
+        }
+        if (differencesFromFirstByte == 0) {
+            throw new EntropyQualityException(
+                    "Generated entropy must not contain one repeated byte");
         }
     }
 

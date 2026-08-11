@@ -101,8 +101,7 @@ dependencies {
     implementation 'org.apache.commons:commons-lang3:3.5'
     implementation 'androidx.multidex:multidex:2.0.0'
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.4'
-    // accepted: [S-04] bcprov 1.69 CVE-2025-8885; upgrade deferred
-    implementation 'org.bouncycastle:bcprov-jdk15on:1.69'
+    implementation 'org.bouncycastle:bcprov-jdk18on:1.84'
 
     compileOnly 'org.projectlombok:lombok:1.18.24'
     annotationProcessor 'org.projectlombok:lombok:1.18.24'
@@ -136,5 +135,3 @@ publishing {
         }
     }
 }
-
-

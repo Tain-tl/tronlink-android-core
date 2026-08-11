@@ -63,14 +63,21 @@ public class WalletPath implements Serializable {
 
     public static String buildPath(@Nullable String pathStr) {
         if (AddressUtil.isEmpty(pathStr)) return "";
+        return buildPath(parseWalletPath(pathStr));
+    }
+
+    private static WalletPath parseWalletPath(String pathStr) {
         WalletPath walletPath;
         try {
             walletPath = GsonFormatUtils.gsonToBean(pathStr, WalletPath.class);
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
             LogUtils.e(e);
-            walletPath = new WalletPath();
+            throw new IllegalArgumentException("Failed to parse wallet path", e);
         }
-        return buildPath(walletPath);
+        if (walletPath == null) {
+            throw new IllegalArgumentException("Failed to parse wallet path");
+        }
+        return walletPath;
     }
 
     public static String buildPath(@Nullable WalletPath wp) {
@@ -86,15 +93,11 @@ public class WalletPath implements Serializable {
                 wp.accountIndex;
     }
 
-    public static WalletPath buildWalletPath(String mnemonicPath){
-        if (!AddressUtil.isEmpty(mnemonicPath)) {
-            try {
-                return GsonFormatUtils.gsonToBean(mnemonicPath, WalletPath.class);
-            } catch (Exception e) {
-                LogUtils.e(e);
-            }
+    public static WalletPath buildWalletPath(String mnemonicPath) {
+        if (AddressUtil.isEmpty(mnemonicPath)) {
+            return new WalletPath();
         }
-        return new WalletPath();
+        return parseWalletPath(mnemonicPath);
     }
 
 

@@ -57,4 +57,24 @@ public class MnemonicUtilsTest {
                 MnemonicUtils.generateSeed(VECTOR_MNEMONIC, ""),
                 MnemonicUtils.generateSeed(VECTOR_MNEMONIC, null));
     }
+
+    @Test
+    public void generateMnemonic_allZeroEntropy_matchesOfficialVector() {
+        Assert.assertEquals(VECTOR_MNEMONIC, MnemonicUtils.generateMnemonic(new byte[16]));
+    }
+
+    @Test
+    public void generateMnemonic_repeatedByteEntropy_roundTrips() {
+        byte[] entropy = new byte[16];
+        java.util.Arrays.fill(entropy, (byte) 0x5a);
+
+        String mnemonic = MnemonicUtils.generateMnemonic(entropy);
+
+        Assert.assertArrayEquals(entropy, MnemonicUtils.generateEntropy(mnemonic));
+    }
+
+    @Test
+    public void generateEntropy_allZeroVector_remainsImportCompatible() {
+        Assert.assertArrayEquals(new byte[16], MnemonicUtils.generateEntropy(VECTOR_MNEMONIC));
+    }
 }

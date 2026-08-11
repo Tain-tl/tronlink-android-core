@@ -470,17 +470,14 @@ public class TransactionUtils {
         return transaction.toBuilder().setRawData(rawData).build();
     }
 
-    public static Transaction setTimestamp(Transaction transaction) {
-        return setTimestamp(transaction, 0);
-    }
 
     public static Transaction setTimestamp(Transaction transaction, long timestamp) {
-        long currentTime = System.currentTimeMillis();//*1000000 + System.nanoTime()%1000000;
         Transaction.Builder builder = transaction.toBuilder();
         Transaction.raw.Builder rowBuilder = transaction.getRawData()
                 .toBuilder();
-        // accepted: [Q-01] Network expiration validation limits impact; changing raw_data, txids, and signing inputs has higher compatibility risk.
-        if (timestamp != 0) rowBuilder.setTimestamp(currentTime);
+        if (timestamp != 0) {
+            rowBuilder.setTimestamp(timestamp);
+        }
         builder.setRawData(rowBuilder.build());
         return builder.build();
     }
@@ -491,7 +488,6 @@ public class TransactionUtils {
             return "";
         return AddressUtil.encode58Check(getOwner(transaction.getRawData().getContract(0)));
     }
-
 
 
     /**
@@ -649,7 +645,6 @@ public class TransactionUtils {
         }
         return "";
     }
-
 
 
     public static Transaction replaceVoteWitnessContract(Transaction tx, WitnessContract.VoteWitnessContract voteWitnessContract) {

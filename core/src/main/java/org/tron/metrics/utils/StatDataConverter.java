@@ -40,7 +40,7 @@ public class StatDataConverter {
             xData.setIdType(String.valueOf(entity.getIdType()));
             xData.setTrxBalance(formatReportNumber(entity.getTrxBalance()));
             xData.setUsdtBalance(formatReportNumber(entity.getUsdtBalance()));
-            xData.setUsdBalance(entity.getUsdBalance());
+            xData.setUsdBalance(formatReportNumber(entity.getUsdBalance()));
             xData.setDay(entity.getDay());
             xDataList.add(xData);
         }
