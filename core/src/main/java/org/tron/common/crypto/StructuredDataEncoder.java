@@ -429,7 +429,16 @@ public class StructuredDataEncoder {
         for (StructuredData.Entry field : types.get(primaryType)) {
             Object value = data.get(field.getName());
 
-            if (value == null) continue;
+            // The encoding has no per-field placeholder, so skipping a declared field
+            // collapses different messages onto one hash: Mail(from,to) with {from:1}
+            // and {to:1} would both encode to [typeHash, 1]. Reference implementations
+            // (ethers.js, eth-sig-util) reject missing fields; abort so signing cancels.
+            if (value == null) {
+                throw new IllegalArgumentException(
+                        String.format(
+                                "Missing value for EIP-712 field '%s' of struct '%s'",
+                                field.getName(), primaryType));
+            }
 
             if (field.getType().equals("string")) {
                 encTypes.add("bytes32");
