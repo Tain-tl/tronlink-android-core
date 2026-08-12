@@ -3,9 +3,12 @@
 ## Scan report 2026-07-14 (slash)
 
 - S-04 (MEDIUM): scrypt parameter combination can allocate ~8 GiB before MAC verify.
-  Accepted: keystore import is app-internal only; KeyStoreUtils has no external/untrusted
-  caller path for attacker-supplied JSON. Scan report 2026-07-14.
-  Location: KeyStoreUtils.decryptToByte (scrypt n/r/p checks)
+  Accepted (premise corrected 2026-08-12 after scan 2026-08-11 reopened it as S-07):
+  keystore JSON is user-pasted/untrusted, but the worst case is a local availability
+  hit (OOM/high CPU) on the importing user's own device — no key material, signing,
+  or asset path is exposed — and tighter combined caps risk rejecting
+  odd-but-legitimate third-party keystores. Scan reports 2026-07-14 / 2026-08-11.
+  Location: KeyStoreUtils.decryptToByte (scrypt n/r/p checks; pbkdf2 c cap)
 
 - S-08 (MEDIUM): Illegal hex nibble not rejected in Numeric.hexStringToByteArray;
   Character.digit(-1) silently packs wrong bytes. Accepted: dirty input comes from
