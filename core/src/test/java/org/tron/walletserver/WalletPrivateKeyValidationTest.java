@@ -30,6 +30,16 @@ public class WalletPrivateKeyValidationTest {
         Assert.assertFalse(outOfRangeWallet.isOpen());
     }
 
+    @Test
+    public void privateKeyImport_requiresCanonical32ByteEncoding() {
+        Assert.assertFalse(new Wallet(I_TYPE.PRIVATE, "1").isOpen());
+        Assert.assertFalse(new Wallet(I_TYPE.PRIVATE, "001").isOpen());
+        Assert.assertFalse(new Wallet(I_TYPE.PRIVATE,
+                "0" + String.format("%064x", BigInteger.ONE)).isOpen());
+        Assert.assertTrue(new Wallet(I_TYPE.PRIVATE,
+                "0x" + String.format("%064x", BigInteger.ONE)).isOpen());
+    }
+
     private static Wallet importPrivateKey(BigInteger privateKey) {
         return new Wallet(I_TYPE.PRIVATE, String.format("%064x", privateKey));
     }

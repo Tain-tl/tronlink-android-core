@@ -167,7 +167,7 @@ public class Wallet implements Comparable<Wallet> {
             // and non-hex input would crash in Hex.decode with an undeclared
             // DecoderException.
             if (mECKey != null) {
-                privateKeyBytes33 = ByteArray.fromHexString(key);
+                privateKeyBytes33 = mECKey.getPrivKeyBytes();
             }
         } else if (I_Type == I_TYPE.MNEMONIC)
             generateKeyForMnemonic(key);
@@ -209,11 +209,17 @@ public class Wallet implements Comparable<Wallet> {
      * sensitive flow rather than assuming a key is present.
      */
     public boolean generateKeyForPrivateKey(String privateKey) {
-
-        if (privateKey != null && !privateKey.isEmpty() && AddressUtil.isHexString(privateKey)) {
+        String normalizedPrivateKey = privateKey;
+        if (normalizedPrivateKey != null
+                && (normalizedPrivateKey.startsWith("0x") || normalizedPrivateKey.startsWith("0X"))) {
+            normalizedPrivateKey = normalizedPrivateKey.substring(2);
+        }
+        if (normalizedPrivateKey != null
+                && normalizedPrivateKey.length() == 64
+                && AddressUtil.isHexString(normalizedPrivateKey)) {
             ECKey tempKey = null;
             try {
-                BigInteger priK = new BigInteger(privateKey, 16);
+                BigInteger priK = new BigInteger(normalizedPrivateKey, 16);
                 tempKey = ECKey.fromPrivate(priK);
             } catch (Exception ex) {
                 // Keep failure logging minimal: record the exception type only.
