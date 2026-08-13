@@ -172,9 +172,13 @@ public class KeyStoreUtils {
             if (p < 1 || p > 16) {
                 throw new CipherException("Invalid scrypt p parameter");
             }
-            // accepted: [S-04] Combined scrypt memory budget not enforced. Keystore import is
-            // app-internal only (no external/untrusted keystore API); no remote malicious
-            // JSON path. Scan report 2026-07-14.
+            // accepted: [S-04 2026-07-14, reopened as S-07 2026-08-11, re-accepted 2026-08-12]
+            // Combined KDF resource budget (128*N*r scrypt memory, PBKDF2 iteration CPU) is
+            // not enforced beyond the per-parameter caps above, so user-pasted keystore JSON
+            // can request ~8 GiB / tens of seconds of KDF work before the MAC check. Worst
+            // case is a local availability hit (OOM/ANR) on the importing user's own device —
+            // no key material, signing or asset path is exposed — and tighter combined caps
+            // risk rejecting odd-but-legitimate third-party keystores.
             // generateMac reads derivedKey[16..32), so anything below 32 is unusable.
             // Upper bound stays generous: legacy keystores were created with
             // DKLEN = plaintext length, so a mnemonic keystore stores dklen equal to
