@@ -96,8 +96,9 @@ public class KeyStoreUtils {
 
     static void validateAddressMatches(String address, ECKey decryptedKey)
             throws AddressMismatchException {
-        // Some third-party wallet keystores omit the optional address field. Keep those files
-        // importable for compatibility; all password, MAC and private-key checks still apply.
+        // accepted (S-04): Some third-party wallet keystores omit the optional address field.
+        // Keep those files importable for compatibility; password, MAC and private-key checks
+        // still apply, while address binding is enforced whenever a non-empty address is present.
         if (address == null || address.trim().isEmpty()) {
             return;
         }
