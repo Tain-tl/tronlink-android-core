@@ -5,6 +5,8 @@ import com.google.protobuf.ByteString;
 import org.bouncycastle.util.encoders.Hex;
 import org.junit.After;
 import org.junit.Assert;
+import org.junit.Assume;
+import org.junit.BeforeClass;
 import org.junit.Test;
 import org.tron.api.GrpcAPI;
 import org.tron.api.WalletGrpc;
@@ -31,12 +33,12 @@ import io.grpc.ManagedChannelBuilder;
 public class TransactionCoreUnitTest {
     public static final String TAG_TRANSACTION = "transaction";
     public static final String TAG_ADDRESS = "Address";
-    String tgtIp = "grpc.trongrid.io:50051";
+    String tgtIp = "localhost:50051";
 
     private static final String WALLET_NAME = "walletTest";
-    private static final String PRIVATE_KEY = "";
-    private static final String WALLET_ADDRESS = "";
-    private static final String WALLET_ADDRESS_TO = "";
+    private static final String PRIVATE_KEY = env("TRON_TEST_PRIVATE_KEY");
+    private static final String WALLET_ADDRESS = env("TRON_TEST_WALLET_ADDRESS");
+    private static final String WALLET_ADDRESS_TO = env("TRON_TEST_WALLET_ADDRESS_TO");
     private static final String TOKEN_ID = "1004114";//you can use your any test tokenid of any trc10 token
     private static final String CONTRACT_ADDRESS = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";//you can use your any test contract address of any trc20 token
 
@@ -46,6 +48,17 @@ public class TransactionCoreUnitTest {
     Wallet testWallet = null;
     private ManagedChannel channel = null;
     private WalletGrpc.WalletBlockingStub stub;
+
+    @BeforeClass
+    public static void requireExplicitLocalIntegrationOptIn() {
+        Assume.assumeTrue("Network integration tests are disabled by default",
+                "true".equalsIgnoreCase(env("TRON_LOCAL_INTEGRATION_TESTS")));
+    }
+
+    private static String env(String name) {
+        String value = System.getenv(name);
+        return value == null ? "" : value;
+    }
 
     @Test
     public void importWalletWithPrivateKey() throws Exception {
