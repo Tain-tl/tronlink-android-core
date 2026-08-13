@@ -306,6 +306,9 @@ public class AbiUtil {
             }
 
             DataWord word = new DataWord(bytes);
+            // Compatibility contract: Swap approval flows use "-1" as the unlimited-allowance
+            // sentinel for approve(address,uint256). The two's-complement encoding below maps it
+            // to uint256 max (0xffff...ffff). Migrate those callers before rejecting "-1" here.
             if (bigInteger.compareTo(new BigInteger("0")) == -1) {
                 word.negate();
             }
