@@ -62,6 +62,13 @@ public class StatDataConverter {
             yData.setActionType(String.valueOf(entity.getActionType()));
             yData.setCount(String.valueOf(entity.getCount()));
             yData.setTokenAddress(entity.getTokenAddress());
+            // accepted: [S-07 / external CORE-S-03] tokenAmount/energy/bandwidth/burn go out at
+            // full precision. On a (uid, actionType, token, day) group with count==1 the value
+            // equals the single on-chain amount and, together with the persistent per-address
+            // UUID, can be cross-referenced against the public chain to re-identify the address.
+            // Risk accepted (metrics-only, Basic-Mode gated, server-side threat model); do NOT
+            // widen this payload. NOTE: the "exact amounts never transmitted" claim in
+            // PRIVACY-POLICY.md §4.2/§5 still needs reconciling with this behaviour.
             yData.setTokenAmount(entity.getTokenAmount());
             yData.setEnergy(entity.getEnergy());
             yData.setBandwidth(entity.getBandwidth());
