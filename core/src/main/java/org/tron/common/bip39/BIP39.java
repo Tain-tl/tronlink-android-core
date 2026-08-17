@@ -101,6 +101,12 @@ public class BIP39
      * Inverse of {@link #decode(String, String)}, using the same weak Blowfish/ECB scheme.
      * Kept only for backward compatibility with legacy wallets; must not be removed and its
      * algorithm must not be changed. New code must not call this method.
+     *
+     * <p>Security review 2026-08-17 (external CORE-S-15, registry 20260407-S04): risk accepted.
+     * This weak-format write path has no callers in this repo or in the app; it is retained only
+     * as the documented inverse of the legacy read path. Do NOT add callers — the legacy format
+     * is read-only compatibility, and new write paths must use the modern authenticated scheme
+     * ({@code org.tron.common.crypto.MnemonicUtils#generateSeed}).
      */
     public static String encode (byte[] data, String passphrase) throws ValidationException
     {
