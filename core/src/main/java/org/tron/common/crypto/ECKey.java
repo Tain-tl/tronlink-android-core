@@ -556,7 +556,6 @@ public class ECKey implements Serializable, SignInterface {
    * @param pub The public key bytes to use.
    * @return -
    */
-  // accepted: [S-04] DER path uses BC 1.69 ASN.1 (CVE-2025-8885); upgrade deferred
   public static boolean verify(byte[] data, byte[] signature, byte[] pub) {
     return verify(data, ECDSASignature.decodeFromDER(signature), pub);
   }
