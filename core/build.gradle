@@ -7,10 +7,6 @@ plugins {
 group = 'org.tronlink'
 
 android {
-    // accepted (Q-13): compileSdk 36 is ahead of what AGP 8.5.1 was officially tested against
-    // (34), which only emits a benign warning. Moving to an AGP/Gradle combo that supports
-    // compileSdk 36 is deferred to a separate toolchain-upgrade task (see the AGP classpath note
-    // in the root build.gradle).
     compileSdk 36
     namespace = "org.tron"
     defaultConfig {
@@ -103,8 +99,10 @@ dependencies {
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.4'
     implementation 'org.bouncycastle:bcprov-jdk18on:1.84'
 
-    compileOnly 'org.projectlombok:lombok:1.18.24'
-    annotationProcessor 'org.projectlombok:lombok:1.18.24'
+    // 1.18.34 matches the main tronlink-android project; 1.18.24 breaks on JDK 21 javac
+    // (NoSuchFieldError: JCImport.qualid changed type in JDK 21, fixed in Lombok 1.18.30+).
+    compileOnly 'org.projectlombok:lombok:1.18.34'
+    annotationProcessor 'org.projectlombok:lombok:1.18.34'
     // SLF4J
     implementation 'org.slf4j:slf4j-api:1.7.25'
 
