@@ -237,7 +237,7 @@ public class Wallet implements Comparable<Wallet> {
     }
 
 
-    public boolean generateKeyForMnemonic(String mnemonic) {
+    private boolean generateKeyForMnemonic(String mnemonic) {
         return generateKeyForMnemonic(mnemonic, 44, 195, 0, 0, 0);
     }
 
@@ -260,7 +260,8 @@ public class Wallet implements Comparable<Wallet> {
      * null, so callers must check this result (or {@link #isOpen()}) before continuing a
      * sensitive flow rather than assuming a key is present.
      */
-    public boolean generateKeyForMnemonic(String mnemonic, int purpose, int coinType, int account, int change, int accountIndex) {
+    private boolean generateKeyForMnemonic(String mnemonic, int purpose, int coinType,
+            int account, int change, int accountIndex) {
         return generateKeyForMnemonic(mnemonic, purpose, coinType, account, change, accountIndex,
                 false);
     }
@@ -269,7 +270,7 @@ public class Wallet implements Comparable<Wallet> {
             int account, int change, int accountIndex, boolean strictVerification) {
         boolean isAccepted = mnemonic != null
                 && !mnemonic.isEmpty()
-                && (!strictVerification || MnemonicUtils.validateMnemonic(mnemonic));
+                && (!strictVerification || MnemonicUtils.validateMnemonicStrict(mnemonic));
         if (isAccepted) {
             ECKey tempKey = null;
             try {
@@ -283,7 +284,11 @@ public class Wallet implements Comparable<Wallet> {
                 // Keep failure logging minimal: record the exception type only.
                 LogUtils.e(TAG, "generateKeyForMnemonic failed: " + ex.getClass().getSimpleName());
             }
+
             mECKey = tempKey;
+            if (mECKey == null) {
+                privateKeyBytes33 = null;
+            }
             return mECKey != null;
         } else {
             mECKey = null;
