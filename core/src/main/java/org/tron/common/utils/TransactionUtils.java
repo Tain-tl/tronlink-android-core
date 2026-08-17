@@ -303,8 +303,12 @@ public class TransactionUtils {
         //TODO Temporary add，3。3。0 changed to throw exception
         if (hash == null || hash.length == 0) return transactionBuilderSigned.build();
 
-        if (!isMainChain && chainId == null) {
-            throw new IllegalArgumentException("chainId required when isMainChain=false");
+        // Empty must be rejected alongside null: an empty chainId degenerates the
+        // side-chain domain to SHA256(SHA256(rawData)), shared by every chain whose
+        // config lacks a chainId. The production path (ChainBean coercing null to ""
+        // then ByteArray.fromHexString) delivers byte[0], never null.
+        if (!isMainChain && (chainId == null || chainId.length == 0)) {
+            throw new IllegalArgumentException("non-empty chainId required when isMainChain=false");
         }
         byte[] newHash;
         if (isMainChain) {
