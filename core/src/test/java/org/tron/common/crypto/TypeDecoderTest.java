@@ -4,10 +4,13 @@ import org.junit.Assert;
 import org.junit.Test;
 import org.tron.common.crypto.datatypes.DynamicArray;
 import org.tron.common.crypto.datatypes.DynamicBytes;
+import org.tron.common.crypto.datatypes.Type;
 import org.tron.common.crypto.datatypes.generated.StaticArray2;
 import org.tron.common.crypto.datatypes.generated.Uint256;
 
 import java.math.BigInteger;
+import java.util.Collections;
+import java.util.List;
 
 public class TypeDecoderTest {
 
@@ -88,6 +91,57 @@ public class TypeDecoderTest {
         // Pre-fix, decodeArrayElements pre-sized new ArrayList<>(Integer.MAX_VALUE).
         String input = word("7fffffff") + WORD_ONE;
         TypeDecoder.decodeDynamicArray(input, 0, new TypeReference<DynamicArray<Uint256>>() {});
+    }
+
+    // PR#32 M7 regression: getDataOffset shifted attacker-controlled offset words
+    // in int space, so values >= 2^30 wrapped negative and out-of-range offsets
+    // only surfaced later as unchecked StringIndexOutOfBoundsException.
+
+    @Test
+    public void getDataOffset_validOffset_returnsHexOffset() throws Exception {
+        String input = word("20") + word("3") + "abcdef" + word("").substring(6);
+        int hexOffset =
+                DefaultFunctionReturnDecoder.getDataOffset(
+                        input, 0, new TypeReference<DynamicBytes>() {});
+        Assert.assertEquals(64, hexOffset);
+    }
+
+    @Test
+    public void getDataOffset_offsetAtInputEnd_returnsOffset() throws Exception {
+        // 0x20 bytes = 64 hex chars = exactly the input length. The bound must
+        // stay wide (> input length) so no currently-decodable payload is rejected.
+        int hexOffset =
+                DefaultFunctionReturnDecoder.getDataOffset(
+                        word("20"), 0, new TypeReference<DynamicBytes>() {});
+        Assert.assertEquals(64, hexOffset);
+    }
+
+    @Test(expected = TypeMappingException.class)
+    public void getDataOffset_shiftOverflowOffset_throws() throws Exception {
+        // 2^30 passes decodeUintAsInt, but << 1 in int space wraps it negative.
+        DefaultFunctionReturnDecoder.getDataOffset(
+                word("40000000"), 0, new TypeReference<DynamicBytes>() {});
+    }
+
+    @Test(expected = TypeMappingException.class)
+    public void getDataOffset_offsetBeyondInput_throws() throws Exception {
+        // Declares byte offset 0x100 against a single-word input.
+        DefaultFunctionReturnDecoder.getDataOffset(
+                word("100"), 0, new TypeReference<DynamicBytes>() {});
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void decodeFunctionReturn_dynamicBytes_stillDecodes() throws Exception {
+        String input = word("20") + word("3") + "abcdef" + word("").substring(6);
+        TypeReference<Type> reference =
+                (TypeReference<Type>) TypeReference.makeTypeReference("bytes");
+        List<Type> decoded = FunctionReturnDecoder.decode(
+                input, Collections.singletonList(reference));
+        Assert.assertEquals(1, decoded.size());
+        Assert.assertArrayEquals(
+                new byte[] {(byte) 0xab, (byte) 0xcd, (byte) 0xef},
+                ((DynamicBytes) decoded.get(0)).getValue());
     }
 
     @Test

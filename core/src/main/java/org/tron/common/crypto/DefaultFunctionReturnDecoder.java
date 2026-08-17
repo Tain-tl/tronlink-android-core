@@ -165,8 +165,18 @@ public class DefaultFunctionReturnDecoder extends FunctionReturnDecoder {
                 || Utf8String.class.isAssignableFrom(type)
                 || DynamicArray.class.isAssignableFrom(type)
                 || hasDynamicOffsetInStaticArray(typeReference, offset)) {
-            // accepted: [S-04] Malformed offsets only abort ABI decoding; stricter exceptions may still escape public decoder callers.
-            return TypeDecoder.decodeUintAsInt(input, offset) << 1;
+            // Shift in long space: decodeUintAsInt caps the word at 2^31-1, but an
+            // int << 1 wraps values >= 2^30 negative before substring can reject
+            // them. Bound only by input length — a valid data offset always points
+            // inside the input, so nothing decodable is rejected (PR#32 M7).
+            long hexStringDataOffset =
+                    ((long) TypeDecoder.decodeUintAsInt(input, offset)) << 1;
+            if (hexStringDataOffset > input.length()) {
+                throw new TypeMappingException(
+                        "ABI data offset " + (hexStringDataOffset >> 1)
+                                + " bytes exceeds input of " + (input.length() / 2) + " bytes");
+            }
+            return (int) hexStringDataOffset;
         } else {
             return offset;
         }
