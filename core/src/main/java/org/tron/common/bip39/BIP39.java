@@ -43,6 +43,11 @@ public class BIP39
      * <b>must not be removed and its algorithm must not be changed</b> — otherwise historical
      * data could no longer be decrypted. New code must not call this method; use
      * {@code org.tron.common.crypto.MnemonicUtils#generateSeed} instead.
+     *
+     * <p>Security review 2026-08-18 (external CORE-S-15 / registry 20260407-S04): the legacy
+     * format is read-only compatibility. The matching {@code encode} write path is retained
+     * for symmetry only and must not gain new callers; new write paths must use the modern
+     * authenticated scheme.
      */
     public static byte[] decode (String mnemonic, String passphrase) throws ValidationException
     {
