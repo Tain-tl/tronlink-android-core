@@ -28,6 +28,8 @@ public class SymmEncoder {
     return AesEcbEncode(plain, key);
   }
 
+  // Legacy decryption only. Callers must atomically persist the replacement keystore and
+  // remove the legacy ciphertext only after the new keystore write succeeds.
   public static byte[] AES128EcbDec(byte[] encoded, byte[] aesKey) throws CipherException {
     if (aesKey == null || aesKey.length != 16) {
       return null;
@@ -64,6 +66,8 @@ public class SymmEncoder {
   }
 
 
+  // Legacy decryption only. Callers must atomically persist the replacement keystore and
+  // remove the legacy ciphertext only after the new keystore write succeeds.
   public static byte[] AESEcbDec(byte[] encoded, byte[] aesKey) throws CipherException {
     if (aesKey == null || aesKey.length != 16) {
       return null;
