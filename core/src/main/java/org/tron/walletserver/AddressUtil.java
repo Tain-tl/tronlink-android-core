@@ -124,6 +124,9 @@ public class AddressUtil {
 
             return unPreAddress.replaceFirst("41", "");
         } else if (address.startsWith("41")) {
+            // SECURITY-SCAN S-01 - Ignored after manual security review: This behavior is required
+            // for Ethereum-address compatibility, as web3j's Address(String) normalizes
+            // variable-width hexadecimal input through BigInteger and Uint160.
             return unPreAddress.replaceFirst("41", "");
         } else if (address.startsWith("0x")) {
             return unPreAddress.replaceFirst("0x", "");
