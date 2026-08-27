@@ -40,7 +40,6 @@ public class Wallet implements Comparable<Wallet> {
     private long createTime;
     private int color = -1;
     private static final String TAG = "Wallet";
-    private static final int MAX_ENTROPY_GENERATION_ATTEMPTS = 2;
     private String mnemonicPath;
 
 
@@ -126,20 +125,9 @@ public class Wallet implements Comparable<Wallet> {
         byte[] initialEntropy = new byte[16];
         byte[] seed = null;
         try {
-            for (int attempt = 0; attempt < MAX_ENTROPY_GENERATION_ATTEMPTS; attempt++) {
-                secureRandom.nextBytes(initialEntropy);
-                try {
-                    MnemonicUtils.validateGeneratedEntropyQuality(initialEntropy);
-                    mnemonic = MnemonicUtils.generateMnemonic(initialEntropy);
-                    break;
-                } catch (MnemonicUtils.EntropyQualityException ex) {
-                    if (attempt + 1 >= MAX_ENTROPY_GENERATION_ATTEMPTS) {
-                        throw ex;
-                    }
-                    LogUtils.e(TAG, "Degenerate entropy rejected; retrying once");
-                    Arrays.fill(initialEntropy, (byte) 0);
-                }
-            }
+            secureRandom.nextBytes(initialEntropy);
+            MnemonicUtils.validateGeneratedEntropyQuality(initialEntropy);
+            mnemonic = MnemonicUtils.generateMnemonic(initialEntropy);
             seed = MnemonicUtils.generateSeed(mnemonic, null);
 
             Bip32ECKeyPair masterKeypair = Bip32ECKeyPair.generateKeyPair(seed);

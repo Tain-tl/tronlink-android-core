@@ -7,6 +7,7 @@ import org.bouncycastle.crypto.generators.PKCS5S2ParametersGenerator;
 import org.bouncycastle.crypto.params.KeyParameter;
 import org.tron.common.bip39.BIP39;
 
+import java.security.MessageDigest;
 import java.text.Normalizer;
 import java.util.Arrays;
 import java.util.BitSet;
@@ -24,6 +25,8 @@ public class MnemonicUtils {
 
     private static final int SEED_ITERATIONS = 2048;
     private static final int SEED_KEY_SIZE = 512;
+    private static final Object ENTROPY_HEALTH_LOCK = new Object();
+    private static byte[] previousEntropyFingerprint;
     private static List<String> WORD_LIST = null;
 
     /** Signals that an entropy source returned an unmistakably degenerate value. */
@@ -223,18 +226,28 @@ public class MnemonicUtils {
      *
      * @param entropy entropy returned by the wallet's random source
      * @throws IllegalArgumentException if the entropy length is not valid for BIP-39
-     * @throws EntropyQualityException if the entropy is all zeros or one repeated byte
+     * @throws EntropyQualityException if the entropy is degenerate or repeats the previous
+     *                                 generated entropy block
      */
     public static void validateGeneratedEntropyQuality(byte[] entropy) {
         validateEntropy(entropy);
 
         int nonZeroBytes = 0;
         int differencesFromFirstByte = 0;
+        boolean ascendingCounter = true;
+        boolean descendingCounter = true;
         byte firstByte = entropy[0];
 
-        for (byte value : entropy) {
+        for (int i = 0; i < entropy.length; i++) {
+            byte value = entropy[i];
             nonZeroBytes |= value;
             differencesFromFirstByte |= value ^ firstByte;
+            if (i > 0) {
+                int previousValue = entropy[i - 1] & 0xff;
+                int currentValue = value & 0xff;
+                ascendingCounter &= currentValue == ((previousValue + 1) & 0xff);
+                descendingCounter &= currentValue == ((previousValue - 1) & 0xff);
+            }
         }
 
         if (nonZeroBytes == 0) {
@@ -243,6 +256,20 @@ public class MnemonicUtils {
         if (differencesFromFirstByte == 0) {
             throw new EntropyQualityException(
                     "Generated entropy must not contain one repeated byte");
+        }
+        if (ascendingCounter || descendingCounter) {
+            throw new EntropyQualityException(
+                    "Generated entropy must not contain a counting pattern");
+        }
+
+        byte[] fingerprint = Hash.sha256(entropy);
+        synchronized (ENTROPY_HEALTH_LOCK) {
+            if (previousEntropyFingerprint != null
+                    && MessageDigest.isEqual(previousEntropyFingerprint, fingerprint)) {
+                throw new EntropyQualityException(
+                        "Generated entropy repeated the previous block");
+            }
+            previousEntropyFingerprint = fingerprint;
         }
     }
 
