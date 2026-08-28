@@ -16,6 +16,12 @@ public class SymmEncoder {
     return secretKey;
   }
 
+  /**
+   * Encrypts data with unauthenticated AES/ECB for legacy compatibility.
+   *
+   * @deprecated Do not use for new data. Use an authenticated encryption mode such as AES-GCM.
+   */
+  @Deprecated
   public static byte[] AES128EcbEnc(byte[] plain, byte[] aesKey) throws CipherException {
     if (aesKey == null || aesKey.length != 16) {
       return null;
@@ -28,8 +34,14 @@ public class SymmEncoder {
     return AesEcbEncode(plain, key);
   }
 
-  // Legacy decryption only. Callers must atomically persist the replacement keystore and
-  // remove the legacy ciphertext only after the new keystore write succeeds.
+  /**
+   * Decrypts legacy AES/ECB/NoPadding wallet data.
+   * Callers must atomically persist the replacement keystore and remove the legacy ciphertext
+   * only after the new keystore write succeeds.
+   *
+   * @deprecated Only for migrating legacy wallet data. Do not use for newly stored data.
+   */
+  @Deprecated
   public static byte[] AES128EcbDec(byte[] encoded, byte[] aesKey) throws CipherException {
     if (aesKey == null || aesKey.length != 16) {
       return null;
@@ -66,8 +78,14 @@ public class SymmEncoder {
   }
 
 
-  // Legacy decryption only. Callers must atomically persist the replacement keystore and
-  // remove the legacy ciphertext only after the new keystore write succeeds.
+  /**
+   * Decrypts legacy AES/ECB/PKCS7Padding wallet data.
+   * Callers must atomically persist the replacement keystore and remove the legacy ciphertext
+   * only after the new keystore write succeeds.
+   *
+   * @deprecated Only for migrating legacy wallet data. Do not use for newly stored data.
+   */
+  @Deprecated
   public static byte[] AESEcbDec(byte[] encoded, byte[] aesKey) throws CipherException {
     if (aesKey == null || aesKey.length != 16) {
       return null;
