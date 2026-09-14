@@ -165,10 +165,10 @@ Q-02 (scan 2026-07-29): TransactionUtils.setTimestamp keeps its legacy behavior.
   contract. Scan report 2026-08-03.
   Location: org/tron/net/KeyStoreUtils.java getKeyStore/decryptToByte/decrypt
 
-- Q-15 (MINOR): Bip32ECKeyPair.getChainCode, ECKey.getAddress, and ECKey.getNodeId return
-  their internal/cached arrays, so a caller mutating the result poisons later child
-  derivations or the cached address/node id every subsequent caller sees. Accepted: no
-  in-repo caller mutates these, and switching to per-call clones changes reference
-  semantics on a hot wallet API. Scan report 2026-08-03.
-  Location: org/tron/common/bip32/Bip32ECKeyPair.java getChainCode;
-  org/tron/common/crypto/ECKey.java getAddress/getNodeId
+- Q-15 (MINOR, partially fixed 2026-09-14): Bip32ECKeyPair.getChainCode now returns a
+  defensive copy, preventing callers from changing subsequent child derivations.
+  ECKey.getAddress and ECKey.getNodeId still return their internal/cached arrays, so
+  a caller mutating the result poisons the cached address/node id subsequent callers see.
+  Remaining risk accepted: no in-repo caller mutates these, and switching to per-call
+  clones changes reference semantics on a hot wallet API. Scan report 2026-08-03.
+  Remaining location: org/tron/common/crypto/ECKey.java getAddress/getNodeId

@@ -2,6 +2,7 @@ package org.tron.common.bip32;
 
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.tron.common.crypto.Hash;
+import org.tron.common.crypto.jce.TronCastleProvider;
 import org.tron.common.utils.Utils;
 import org.tron.walletserver.AddressUtil;
 
@@ -31,7 +32,7 @@ public class Keys {
 
     static {
         if (Security.getProvider(BouncyCastleProvider.PROVIDER_NAME) == null) {
-            Security.addProvider(new BouncyCastleProvider());
+            Security.addProvider(TronCastleProvider.getInstance());
         }
     }
 
@@ -48,7 +49,9 @@ public class Keys {
     static KeyPair createSecp256k1KeyPair() throws NoSuchProviderException,
             NoSuchAlgorithmException, InvalidAlgorithmParameterException {
 
-        KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("ECDSA", "BC");
+        // Reuse the provider instance without relying on its global BC registration.
+        KeyPairGenerator keyPairGenerator =
+                KeyPairGenerator.getInstance("ECDSA", TronCastleProvider.getInstance());
         ECGenParameterSpec ecGenParameterSpec = new ECGenParameterSpec("secp256k1");
         keyPairGenerator.initialize(ecGenParameterSpec, Utils.getRandom());
         return keyPairGenerator.generateKeyPair();
