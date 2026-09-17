@@ -199,7 +199,7 @@ public class Wallet implements Comparable<Wallet> {
      * so callers must check this result (or {@link #isOpen()}) before continuing a
      * sensitive flow rather than assuming a key is present.
      */
-    public boolean generateKeyForPrivateKey(String privateKey) {
+    private boolean generateKeyForPrivateKey(String privateKey) {
         String normalizedPrivateKey = privateKey;
         if (normalizedPrivateKey != null
                 && (normalizedPrivateKey.startsWith("0x") || normalizedPrivateKey.startsWith("0X"))) {

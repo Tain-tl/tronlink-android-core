@@ -172,3 +172,23 @@ Q-02 (scan 2026-07-29): TransactionUtils.setTimestamp keeps its legacy behavior.
   Remaining risk accepted: no in-repo caller mutates these, and switching to per-call
   clones changes reference semantics on a hot wallet API. Scan report 2026-08-03.
   Remaining location: org/tron/common/crypto/ECKey.java getAddress/getNodeId
+
+## Private-key / RNG audit 2026-09-15 (disposition 2026-09-17)
+
+- F02 (P2): Mnemonic keystore decryption does not validate the recovered mnemonic
+  against an address; changing the unauthenticated IV can corrupt the returned phrase.
+  Accepted by user on 2026-09-17: retain the existing keystore and import behavior.
+  Main-app callers pass the saved wallet's address, while batch saves reuse one
+  mnemonic keystore across accounts sharing a phrase. Its address is therefore not
+  necessarily account zero or the current child account; a blanket address check
+  would reject legitimate existing data. This acceptance does not claim that the
+  current mnemonic decryption path validates the recovered address.
+  Location: KeyStoreUtils.getMnemonicWithKeyStore; main-app WalletUtils.saveWallet
+
+- F03 (P3): TronCastleProvider initialization removes the process-wide BC provider;
+  Hash initialization subsequently registers the SDK provider, potentially affecting
+  other libraries' named-provider lookups or provider configuration.
+  Accepted by user on 2026-09-17: retain existing provider initialization behavior.
+  SDK key generation already uses the provider object directly; no affected host
+  consumer was confirmed. Host integration side effects remain a known limitation.
+  Location: TronCastleProvider.Holder; Hash static initializer
