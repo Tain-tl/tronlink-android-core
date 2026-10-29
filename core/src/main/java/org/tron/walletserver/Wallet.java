@@ -261,9 +261,10 @@ public class Wallet implements Comparable<Wallet> {
                 && (!strictVerification || MnemonicUtils.validateMnemonicStrict(mnemonic));
         if (isAccepted) {
             ECKey tempKey = null;
+            byte[] seed = null;
             try {
                 WalletPath.validate(purpose, coinType, account, change, accountIndex);
-                byte[] seed = MnemonicUtils.generateSeed(mnemonic, null);
+                seed = MnemonicUtils.generateSeed(mnemonic, null);
                 Bip32ECKeyPair masterKeypair = Bip32ECKeyPair.generateKeyPair(seed);
                 Bip32ECKeyPair bip44Keypair = generateBip44KeyPair(masterKeypair, purpose, coinType, account, change, accountIndex);
                 privateKeyBytes33 = bip44Keypair.getPrivateKeyBytes33();
@@ -271,6 +272,10 @@ public class Wallet implements Comparable<Wallet> {
             } catch (Exception ex) {
                 // Keep failure logging minimal: record the exception type only.
                 LogUtils.e(TAG, "generateKeyForMnemonic failed: " + ex.getClass().getSimpleName());
+            } finally {
+                if (seed != null) {
+                    Arrays.fill(seed, (byte) 0);
+                }
             }
 
             mECKey = tempKey;
