@@ -1,18 +1,17 @@
 package org.tron.common.crypto;
 
-import static java.nio.charset.StandardCharsets.UTF_8;
-
 import org.bouncycastle.crypto.digests.SHA512Digest;
 import org.bouncycastle.crypto.generators.PKCS5S2ParametersGenerator;
 import org.bouncycastle.crypto.params.KeyParameter;
 import org.tron.common.bip39.BIP39;
+import org.tron.common.utils.SensitiveData;
 
+import java.nio.CharBuffer;
 import java.security.MessageDigest;
 import java.text.Normalizer;
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.List;
-import java.util.StringTokenizer;
 
 /**
  * Provides utility methods to generate random mnemonics and also generate
@@ -54,6 +53,20 @@ public class MnemonicUtils {
      * @throws IllegalStateException    If the word list has not been loaded
      */
     public static String generateMnemonic(byte[] initialEntropy) {
+        char[] mnemonic = generateMnemonicChars(initialEntropy);
+        try {
+            // Legacy return type necessarily creates an immutable secret string.
+            return new String(mnemonic);
+        } finally {
+            SensitiveData.clear(mnemonic);
+        }
+    }
+
+    /**
+     * Generates an owned mnemonic array without constructing a secret String.
+     * The entropy input is borrowed and is not cleared.
+     */
+    public static char[] generateMnemonicChars(byte[] initialEntropy) {
         if (WORD_LIST == null) {
             WORD_LIST = populateWordList();
         }
@@ -63,21 +76,30 @@ public class MnemonicUtils {
         int checksumLength = ent / 32;
 
         byte checksum = calculateChecksum(initialEntropy);
-        boolean[] bits = convertToBits(initialEntropy, checksum);
-
         int iterations = (ent + checksumLength) / 11;
-        StringBuilder mnemonicBuilder = new StringBuilder();
+        int characterCount = iterations - 1;
         for (int i = 0; i < iterations; i++) {
-            int index = toInt(nextElevenBits(bits, i));
-            mnemonicBuilder.append(WORD_LIST.get(index));
-
-            boolean notLastIteration = i < iterations - 1;
-            if (notLastIteration) {
-                mnemonicBuilder.append(" ");
+            characterCount += WORD_LIST.get(mnemonicWordIndex(initialEntropy, checksum, i)).length();
+        }
+        char[] mnemonic = new char[characterCount];
+        boolean complete = false;
+        try {
+            int offset = 0;
+            for (int i = 0; i < iterations; i++) {
+                String word = WORD_LIST.get(mnemonicWordIndex(initialEntropy, checksum, i));
+                word.getChars(0, word.length(), mnemonic, offset);
+                offset += word.length();
+                if (i < iterations - 1) {
+                    mnemonic[offset++] = ' ';
+                }
+            }
+            complete = true;
+            return mnemonic;
+        } finally {
+            if (!complete) {
+                SensitiveData.clear(mnemonic);
             }
         }
-
-        return mnemonicBuilder.toString();
     }
 
     /**
@@ -88,32 +110,52 @@ public class MnemonicUtils {
      * @return Byte array representation of the entropy
      */
     public static byte[] generateEntropy(String mnemonic) {
+        char[] characters = mnemonic == null ? null : mnemonic.toCharArray();
+        try {
+            return generateEntropyFromChars(characters);
+        } finally {
+            SensitiveData.clear(characters);
+        }
+    }
+
+    /**
+     * Returns owned entropy while borrowing the input. Like the legacy method, this
+     * accepts repeated/leading/trailing ASCII spaces but not other word separators.
+     */
+    public static byte[] generateEntropyFromChars(char[] mnemonic) {
         if (WORD_LIST == null) {
             WORD_LIST = populateWordList();
         }
         final BitSet bits = new BitSet();
-        final int size = mnemonicToBits(mnemonic, bits);
-        if (size == 0) {
-            throw new IllegalArgumentException("Empty mnemonic");
+        byte[] entropy = null;
+        boolean complete = false;
+        try {
+            final int size = mnemonicToBits(mnemonic, bits);
+            if (size == 0) {
+                throw new IllegalArgumentException("Empty mnemonic");
+            }
+            final int ent = 32 * size / 33;
+            if (ent % 8 != 0) {
+                throw new IllegalArgumentException("Wrong mnemonic size");
+            }
+            entropy = new byte[ent / 8];
+            for (int i = 0; i < entropy.length; i++) {
+                entropy[i] = readByte(bits, i);
+            }
+            validateEntropy(entropy);
+            final byte expectedChecksum = calculateChecksum(entropy);
+            final byte actualChecksum = readByte(bits, entropy.length);
+            if (expectedChecksum != actualChecksum) {
+                throw new IllegalArgumentException("Wrong checksum");
+            }
+            complete = true;
+            return entropy;
+        } finally {
+            bits.clear();
+            if (!complete) {
+                SensitiveData.clear(entropy);
+            }
         }
-
-        final int ent = 32 * size / 33;
-        if (ent % 8 != 0) {
-            throw new IllegalArgumentException("Wrong mnemonic size");
-        }
-        final byte[] entropy = new byte[ent / 8];
-        for (int i = 0; i < entropy.length; i++) {
-            entropy[i] = readByte(bits, i);
-        }
-        validateEntropy(entropy);
-
-        final byte expectedChecksum = calculateChecksum(entropy);
-        final byte actualChecksum = readByte(bits, entropy.length);
-        if (expectedChecksum != actualChecksum) {
-            throw new IllegalArgumentException("Wrong checksum");
-        }
-
-        return entropy;
     }
 
     /**
@@ -130,32 +172,66 @@ public class MnemonicUtils {
      * @return Byte array representation of the generated seed
      */
     public static byte[] generateSeed(String mnemonic, String passphrase) {
+        char[] mnemonicChars = mnemonic == null ? null : mnemonic.toCharArray();
+        char[] passphraseChars = passphrase == null ? null : passphrase.toCharArray();
+        try {
+            return generateSeedFromChars(mnemonicChars, passphraseChars);
+        } finally {
+            SensitiveData.clear(mnemonicChars);
+            SensitiveData.clear(passphraseChars);
+        }
+    }
+
+    /**
+     * Derives an owned BIP-39 seed from borrowed character arrays. ASCII input is
+     * encoded directly. Unicode retains a documented immutable normalization
+     * boundary because java.text.Normalizer returns String. Provider-internal
+     * PBKDF2/HMAC state is also outside the scope of application buffer clearing.
+     */
+    public static byte[] generateSeedFromChars(char[] mnemonic, char[] passphrase) {
         if (isMnemonicEmpty(mnemonic)) {
             throw new IllegalArgumentException("Mnemonic is required to generate a seed");
         }
-        passphrase = passphrase == null ? "" : passphrase;
-
-        // BIP-39 requires password and salt in UTF-8 NFKD (as the Javadoc above already
-        // promised). Without normalization, canonically equivalent mnemonics/passphrases
-        // with different code point sequences derive different seeds (Q-11). NFKD is a
-        // no-op for the ASCII English wordlist and ASCII passphrases, so existing seeds
-        // are unaffected.
-        String normalizedMnemonic = Normalizer.normalize(mnemonic, Normalizer.Form.NFKD);
-        String salt =
-                Normalizer.normalize(
-                        String.format("mnemonic%s", passphrase), Normalizer.Form.NFKD);
-        PKCS5S2ParametersGenerator gen = new PKCS5S2ParametersGenerator(new SHA512Digest());
-        gen.init(normalizedMnemonic.getBytes(UTF_8), salt.getBytes(UTF_8), SEED_ITERATIONS);
-
-        return ((KeyParameter) gen.generateDerivedParameters(SEED_KEY_SIZE)).getKey();
+        char[] saltChars = null;
+        byte[] mnemonicBytes = null;
+        byte[] saltBytes = null;
+        try {
+            saltChars = new char[8 + (passphrase == null ? 0 : passphrase.length)];
+            "mnemonic".getChars(0, 8, saltChars, 0);
+            if (passphrase != null) {
+                System.arraycopy(passphrase, 0, saltChars, 8, passphrase.length);
+            }
+            mnemonicBytes = normalizedUtf8(mnemonic);
+            saltBytes = normalizedUtf8(saltChars);
+            PKCS5S2ParametersGenerator gen = new PKCS5S2ParametersGenerator(new SHA512Digest());
+            gen.init(mnemonicBytes, saltBytes, SEED_ITERATIONS);
+            return ((KeyParameter) gen.generateDerivedParameters(SEED_KEY_SIZE)).getKey();
+        } finally {
+            SensitiveData.clear(saltChars);
+            SensitiveData.clear(mnemonicBytes);
+            SensitiveData.clear(saltBytes);
+        }
     }
 
     public static boolean validateMnemonic(String mnemonic) {
+        char[] characters = mnemonic == null ? null : mnemonic.toCharArray();
         try {
-            generateEntropy(mnemonic);
+            return validateMnemonicChars(characters);
+        } finally {
+            SensitiveData.clear(characters);
+        }
+    }
+
+    /** Validates borrowed characters and clears the temporary entropy. */
+    public static boolean validateMnemonicChars(char[] mnemonic) {
+        byte[] entropy = null;
+        try {
+            entropy = generateEntropyFromChars(mnemonic);
             return true;
         } catch (Exception ex) {
             return false;
+        } finally {
+            SensitiveData.clear(entropy);
         }
     }
 
@@ -170,19 +246,28 @@ public class MnemonicUtils {
      * callers that must validate historical phrases without changing their formatting.</p>
      */
     public static boolean validateMnemonicStrict(String mnemonic) {
-        return hasCanonicalWordSeparators(mnemonic) && validateMnemonic(mnemonic);
+        char[] characters = mnemonic == null ? null : mnemonic.toCharArray();
+        try {
+            return validateMnemonicStrictChars(characters);
+        } finally {
+            SensitiveData.clear(characters);
+        }
     }
 
-    private static boolean hasCanonicalWordSeparators(String mnemonic) {
-        if (mnemonic == null || mnemonic.isEmpty()) {
+    public static boolean validateMnemonicStrictChars(char[] mnemonic) {
+        return hasCanonicalWordSeparators(mnemonic) && validateMnemonicChars(mnemonic);
+    }
+
+    private static boolean hasCanonicalWordSeparators(char[] mnemonic) {
+        if (mnemonic == null || mnemonic.length == 0) {
             return false;
         }
 
         boolean previousWasSpace = true;
-        for (int i = 0; i < mnemonic.length(); i++) {
-            char character = mnemonic.charAt(i);
+        for (int i = 0; i < mnemonic.length; i++) {
+            char character = mnemonic[i];
             if (character == ' ') {
-                if (previousWasSpace || i == mnemonic.length() - 1) {
+                if (previousWasSpace || i == mnemonic.length - 1) {
                     return false;
                 }
                 previousWasSpace = true;
@@ -196,14 +281,38 @@ public class MnemonicUtils {
         return !previousWasSpace;
     }
 
-    private static boolean isMnemonicEmpty(String mnemonic) {
-        return mnemonic == null || mnemonic.trim().isEmpty();
+    private static boolean isMnemonicEmpty(char[] mnemonic) {
+        if (mnemonic != null) {
+            for (char character : mnemonic) {
+                // Match String.trim(), rather than widening the legacy definition.
+                if (character > ' ') {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
-    private static boolean[] nextElevenBits(boolean[] bits, int i) {
-        int from = i * 11;
-        int to = from + 11;
-        return Arrays.copyOfRange(bits, from, to);
+    private static byte[] normalizedUtf8(char[] characters) {
+        boolean ascii = true;
+        for (char character : characters) {
+            if (character > 0x7f) {
+                ascii = false;
+                break;
+            }
+        }
+        if (ascii) {
+            return SensitiveData.toUtf8Bytes(characters);
+        }
+        // Compatibility boundary: Unicode NFKD still creates an immutable String.
+        // Do not route the ordinary ASCII mnemonic path through this API.
+        String normalized = Normalizer.normalize(CharBuffer.wrap(characters), Normalizer.Form.NFKD);
+        char[] normalizedCharacters = normalized.toCharArray();
+        try {
+            return SensitiveData.toUtf8Bytes(normalizedCharacters);
+        } finally {
+            SensitiveData.clear(normalizedCharacters);
+        }
     }
 
     private static void validateEntropy(byte[] entropy) {
@@ -273,56 +382,60 @@ public class MnemonicUtils {
         }
     }
 
-    private static boolean[] convertToBits(byte[] initialEntropy, byte checksum) {
+    private static int mnemonicWordIndex(byte[] initialEntropy, byte checksum, int word) {
         int ent = initialEntropy.length * 8;
-        int checksumLength = ent / 32;
-        int totalLength = ent + checksumLength;
-        boolean[] bits = new boolean[totalLength];
-
-        for (int i = 0; i < initialEntropy.length; i++) {
-            for (int j = 0; j < 8; j++) {
-                byte b = initialEntropy[i];
-                bits[8 * i + j] = toBit(b, j);
-            }
-        }
-
-        for (int i = 0; i < checksumLength; i++) {
-            bits[ent + i] = toBit(checksum, i);
-        }
-
-        return bits;
-    }
-
-    private static boolean toBit(byte value, int index) {
-        return ((value >>> (7 - index)) & 1) > 0;
-    }
-
-    private static int toInt(boolean[] bits) {
         int value = 0;
-        for (int i = 0; i < bits.length; i++) {
-            boolean isSet = bits[i];
-            if (isSet) {
-                value += 1 << bits.length - i - 1;
-            }
+        for (int i = word * 11; i < (word + 1) * 11; i++) {
+            int bit = i < ent
+                    ? (initialEntropy[i / 8] >>> (7 - i % 8)) & 1
+                    : (checksum >>> (7 - (i - ent))) & 1;
+            value = (value << 1) | bit;
         }
-
         return value;
     }
 
-    private static int mnemonicToBits(String mnemonic, BitSet bits) {
+    private static int mnemonicToBits(char[] mnemonic, BitSet bits) {
+        if (mnemonic == null) {
+            throw new NullPointerException("mnemonic");
+        }
         int bit = 0;
-        final StringTokenizer tokenizer = new StringTokenizer(mnemonic, " ");
-        while (tokenizer.hasMoreTokens()) {
-            final String word = tokenizer.nextToken();
-            final int index = WORD_LIST.indexOf(word);
+        int start = 0;
+        while (start < mnemonic.length) {
+            if (mnemonic[start] == ' ') {
+                start++;
+                continue;
+            }
+            int end = start + 1;
+            while (end < mnemonic.length && mnemonic[end] != ' ') {
+                end++;
+            }
+            final int index = findWord(mnemonic, start, end);
             if (index < 0) {
                 throw new IllegalArgumentException("Mnemonic contains a word not in the word list");
             }
             for (int k = 0; k < 11; k++) {
                 bits.set(bit++, isBitSet(index, 10 - k));
             }
+            start = end;
         }
         return bit;
+    }
+
+    private static int findWord(char[] mnemonic, int start, int end) {
+        for (int i = 0; i < WORD_LIST.size(); i++) {
+            String word = WORD_LIST.get(i);
+            if (word.length() != end - start) {
+                continue;
+            }
+            int offset = 0;
+            while (offset < word.length() && mnemonic[start + offset] == word.charAt(offset)) {
+                offset++;
+            }
+            if (offset == word.length()) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     private static byte readByte(BitSet bits, int startByte) {
@@ -343,8 +456,11 @@ public class MnemonicUtils {
         int ent = initialEntropy.length * 8;
         byte mask = (byte) (0xff << 8 - ent / 32);
         byte[] bytes = Hash.sha256(initialEntropy);
-
-        return (byte) (bytes[0] & mask);
+        try {
+            return (byte) (bytes[0] & mask);
+        } finally {
+            SensitiveData.clear(bytes);
+        }
     }
 
     // accepted (scan Q-12): WORD_LIST is an immutable list backed by a static array; a lazy-init

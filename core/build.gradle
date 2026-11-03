@@ -41,6 +41,9 @@ android {
     buildFeatures {
         buildConfig = true
     }
+    publishing {
+        singleVariant("release")
+    }
     lintOptions {
         checkReleaseBuilds true
         abortOnError true
@@ -124,12 +127,20 @@ publishing {
     publications {
         // Creates a Maven publication called "release".
         release(MavenPublication) {
-            groupId = 'org.tronlink'
+            groupId = providers.gradleProperty('walletCorePublicationGroup').getOrElse('org.tronlink')
             artifactId = 'tronlink-android-core'
-            version = "${android.defaultConfig.versionName}"
+            version = providers.gradleProperty('walletCorePublicationVersion')
+                    .getOrElse("${android.defaultConfig.versionName}")
             afterEvaluate {
                 from components.release
             }
+        }
+    }
+    repositories {
+        maven {
+            name = 'WalletIntegration'
+            url = uri(providers.gradleProperty('walletCoreRepository')
+                    .getOrElse(layout.buildDirectory.dir('wallet-integration-repo').get().asFile.absolutePath))
         }
     }
 }

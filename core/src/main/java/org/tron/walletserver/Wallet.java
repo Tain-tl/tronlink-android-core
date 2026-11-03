@@ -8,19 +8,18 @@ import androidx.annotation.NonNull;
 import org.tron.common.bip32.Bip32ECKeyPair;
 import org.tron.common.crypto.ECKey;
 import org.tron.common.crypto.MnemonicUtils;
-import org.tron.common.utils.ByteArray;
+import org.tron.common.utils.SensitiveData;
 import org.tron.common.utils.GsonFormatUtils;
 import org.tron.common.utils.LogUtils;
 import org.tron.common.utils.Utils;
 import org.tron.config.Parameter;
 
-import java.math.BigInteger;
 import java.security.SecureRandom;
 import java.util.Arrays;
 
 public class Wallet implements Comparable<Wallet> {
 
-    private ECKey mECKey = null;
+    private volatile ECKey mECKey = null;
 
     private boolean isWatchOnly = false;
     private boolean isShieldedWallet = false;
@@ -34,7 +33,7 @@ public class Wallet implements Comparable<Wallet> {
     private byte[] publicKey;
     private String iconRes;//Avatar
     private boolean isBackUp;//whether  backed up
-    private transient String mnemonic;
+    private transient char[] mnemonicChars;
     private String keyStore;
     private int createType = -1;// tronconfig type
     private long createTime;
@@ -72,12 +71,36 @@ public class Wallet implements Comparable<Wallet> {
         this.color = color;
     }
 
+    /** Legacy text export. Prefer {@link #copyMnemonicChars()} and clear the owned result. */
     public String getMnemonic() {
-        return mnemonic;
+        char[] copy = copyMnemonicChars();
+        try {
+            return copy == null ? null : new String(copy);
+        } finally {
+            SensitiveData.clear(copy);
+        }
     }
 
+    /** Legacy adapter. The caller's immutable String cannot be cleared by this wallet. */
     public void setMnemonic(String mnemonic) {
-        this.mnemonic = mnemonic;
+        char[] copy = mnemonic == null ? null : mnemonic.toCharArray();
+        try {
+            setMnemonicChars(copy);
+        } finally {
+            SensitiveData.clear(copy);
+        }
+    }
+
+    /** Borrows the input and stores an independent copy, clearing any previous owned phrase. */
+    public synchronized void setMnemonicChars(char[] mnemonic) {
+        char[] replacement = mnemonic == null ? null : mnemonic.clone();
+        SensitiveData.clear(mnemonicChars);
+        mnemonicChars = replacement;
+    }
+
+    /** Returns an owned copy. The caller must clear it after use. */
+    public synchronized char[] copyMnemonicChars() {
+        return mnemonicChars == null ? null : mnemonicChars.clone();
     }
 
     public boolean isBackUp() {
@@ -127,14 +150,15 @@ public class Wallet implements Comparable<Wallet> {
         try {
             secureRandom.nextBytes(initialEntropy);
             MnemonicUtils.validateGeneratedEntropyQuality(initialEntropy);
-            mnemonic = MnemonicUtils.generateMnemonic(initialEntropy);
-            seed = MnemonicUtils.generateSeed(mnemonic, null);
+            mnemonicChars = MnemonicUtils.generateMnemonicChars(initialEntropy);
+            seed = MnemonicUtils.generateSeedFromChars(mnemonicChars, null);
 
             Bip32ECKeyPair masterKeypair = Bip32ECKeyPair.generateKeyPair(seed);
             Bip32ECKeyPair bip44Keypair = generateBip44KeyPair(masterKeypair);
             privateKeyBytes33 = bip44Keypair.getPrivateKeyBytes33();
             mECKey = ECKey.fromPrivate(privateKeyBytes33);
         } catch (RuntimeException ex) {
+            clearSensitiveData();
             // Do not log entropy, mnemonic, seed, or private-key material.
             LogUtils.e(TAG, "Wallet generation aborted: " + ex.getClass().getSimpleName());
             throw new IllegalStateException("Failed to generate wallet securely", ex);
@@ -148,39 +172,105 @@ public class Wallet implements Comparable<Wallet> {
 
 
     public Wallet(I_TYPE I_Type, String key) {
-        if (I_Type == I_TYPE.PRIVATE) {
-            generateKeyForPrivateKey(key);
-            // Keep the raw key bytes only when derivation succeeded; otherwise a
-            // failed wallet (isOpen()==false) would still hold the invalid input,
-            // and non-hex input would crash in Hex.decode with an undeclared
-            // DecoderException.
-            if (mECKey != null) {
-                privateKeyBytes33 = mECKey.getPrivKeyBytes();
-            }
-        } else if (I_Type == I_TYPE.MNEMONIC) {
-            generateKeyForMnemonic(key);
-        } else if (I_Type == I_TYPE.MNEMONIC_STRICT_VERIFICATION) {
-            generateKeyForMnemonicStrict(key);
+        char[] chars = key == null ? null : key.toCharArray();
+        try {
+            initializeFromChars(I_Type, chars);
+        } finally {
+            SensitiveData.clear(chars);
         }
     }
 
 
     public Wallet(String mnemonic, WalletPath walletPath) {
-        if (AddressUtil.isEmpty(mnemonic) || walletPath == null) return;
-        generateKeyForMnemonic(mnemonic, walletPath.purpose, walletPath.coinType, walletPath.account, walletPath.change, walletPath.accountIndex);
-        if (mECKey != null && mECKey.hasPrivKey()) {
-            setMnemonicPath(GsonFormatUtils.toGsonString(walletPath));
-            setMnemonic(mnemonic);
+        char[] chars = mnemonic == null ? null : mnemonic.toCharArray();
+        try {
+            initializeMnemonicPath(chars, walletPath);
+        } finally {
+            SensitiveData.clear(chars);
         }
     }
 
+    /** Borrows the input; invalid keys return a closed wallet, matching the legacy constructor. */
+    public static Wallet fromPrivateKeyChars(char[] privateKey) {
+        Wallet wallet = new Wallet();
+        wallet.initializeFromChars(I_TYPE.PRIVATE, privateKey);
+        return wallet;
+    }
+
+    /** Borrows a canonical 32-byte key and stores only independent key material. */
+    public static Wallet fromPrivateKeyBytes(byte[] privateKey) {
+        Wallet wallet = new Wallet();
+        if (privateKey != null && privateKey.length == 32) {
+            try {
+                ECKey key = ECKey.fromPrivate(privateKey);
+                byte[] exported = key.getPrivKeyBytes();
+                wallet.mECKey = key;
+                wallet.privateKeyBytes33 = exported;
+            } catch (RuntimeException ex) {
+                wallet.clearSensitiveData();
+            }
+        }
+        return wallet;
+    }
+
+    /** Legacy-compatible derivation; the phrase is borrowed and is not retained. */
+    public static Wallet fromMnemonicChars(char[] mnemonic) {
+        Wallet wallet = new Wallet();
+        wallet.initializeFromChars(I_TYPE.MNEMONIC, mnemonic);
+        return wallet;
+    }
+
+    /** Strict BIP39 import; the phrase is borrowed and is not retained. */
+    public static Wallet fromMnemonicStrictChars(char[] mnemonic) {
+        Wallet wallet = new Wallet();
+        wallet.initializeFromChars(I_TYPE.MNEMONIC_STRICT_VERIFICATION, mnemonic);
+        return wallet;
+    }
+
+    /** Custom-path derivation, retaining an independent phrase copy like the legacy constructor. */
+    public static Wallet fromMnemonicChars(char[] mnemonic, WalletPath walletPath) {
+        Wallet wallet = new Wallet();
+        wallet.initializeMnemonicPath(mnemonic, walletPath);
+        return wallet;
+    }
+
+    private void initializeFromChars(I_TYPE type, char[] key) {
+        if (type == I_TYPE.PRIVATE) {
+            generateKeyForPrivateKey(key);
+        } else if (type == I_TYPE.MNEMONIC || type == I_TYPE.MNEMONIC_STRICT_VERIFICATION) {
+            generateKeyForMnemonic(key, 44, 195, 0, 0, 0,
+                    type == I_TYPE.MNEMONIC_STRICT_VERIFICATION);
+        }
+    }
+
+    private void initializeMnemonicPath(char[] mnemonic, WalletPath walletPath) {
+        if (legacyEmpty(mnemonic) || walletPath == null) return;
+        if (generateKeyForMnemonic(mnemonic, walletPath.purpose, walletPath.coinType,
+                walletPath.account, walletPath.change, walletPath.accountIndex, false)) {
+            setMnemonicPath(GsonFormatUtils.toGsonString(walletPath));
+            setMnemonicChars(mnemonic);
+        }
+    }
+
+    private static boolean legacyEmpty(char[] value) {
+        if (value == null) return true;
+        int start = 0;
+        int end = value.length;
+        while (start < end && value[start] <= ' ') start++;
+        while (end > start && value[end - 1] <= ' ') end--;
+        return start == end || (end - start == 4 && value[start] == 'n'
+                && value[start + 1] == 'u' && value[start + 2] == 'l' && value[start + 3] == 'l');
+    }
+
     public boolean isOpen() {
-        return mECKey != null && mECKey.getPrivKeyBytes() != null;
+        ECKey key = mECKey;
+        return key != null && key.hasPrivKey();
     }
 
 
     public byte[] getPublicKey() {
-        return mECKey != null ? mECKey.getPubKey() : publicKey;
+        ECKey key = mECKey;
+        return key != null ? key.getPubKey() : publicKey;
     }
 
     public void setPublicKey(byte[] publicKey) {
@@ -188,7 +278,8 @@ public class Wallet implements Comparable<Wallet> {
     }
 
     public byte[] getPrivateKey() {
-        return mECKey != null ? mECKey.getPrivKeyBytes() : null;
+        ECKey key = mECKey;
+        return key != null ? key.getPrivKeyBytes() : null;
     }
 
     /**
@@ -199,38 +290,36 @@ public class Wallet implements Comparable<Wallet> {
      * so callers must check this result (or {@link #isOpen()}) before continuing a
      * sensitive flow rather than assuming a key is present.
      */
-    private boolean generateKeyForPrivateKey(String privateKey) {
-        String normalizedPrivateKey = privateKey;
-        if (normalizedPrivateKey != null
-                && (normalizedPrivateKey.startsWith("0x") || normalizedPrivateKey.startsWith("0X"))) {
-            normalizedPrivateKey = normalizedPrivateKey.substring(2);
-        }
-        if (normalizedPrivateKey != null
-                && normalizedPrivateKey.length() == 64
-                && AddressUtil.isHexString(normalizedPrivateKey)) {
-            ECKey tempKey = null;
-            try {
-                BigInteger priK = new BigInteger(normalizedPrivateKey, 16);
-                tempKey = ECKey.fromPrivate(priK);
-            } catch (Exception ex) {
-                // Keep failure logging minimal: record the exception type only.
-                LogUtils.e(TAG, "generateKeyForPrivateKey failed: " + ex.getClass().getSimpleName());
+    private boolean generateKeyForPrivateKey(char[] privateKey) {
+        if (privateKey == null) return false;
+        int offset = privateKey.length >= 2 && privateKey[0] == '0'
+                && (privateKey[1] == 'x' || privateKey[1] == 'X') ? 2 : 0;
+        if (privateKey.length - offset != 64) return false;
+        byte[] decoded = new byte[32];
+        try {
+            for (int i = 0; i < decoded.length; i++) {
+                int high = hexDigit(privateKey[offset + i * 2]);
+                int low = hexDigit(privateKey[offset + i * 2 + 1]);
+                if (high < 0 || low < 0) return false;
+                decoded[i] = (byte) ((high << 4) | low);
             }
-            mECKey = tempKey;
-            return mECKey != null;
-        } else {
-            mECKey = null;
+            ECKey key = ECKey.fromPrivate(decoded);
+            byte[] exported = key.getPrivKeyBytes();
+            mECKey = key;
+            privateKeyBytes33 = exported;
+            return true;
+        } catch (RuntimeException ex) {
             return false;
+        } finally {
+            SensitiveData.clear(decoded);
         }
     }
 
-
-    private boolean generateKeyForMnemonic(String mnemonic) {
-        return generateKeyForMnemonic(mnemonic, 44, 195, 0, 0, 0);
-    }
-
-    private boolean generateKeyForMnemonicStrict(String mnemonic) {
-        return generateKeyForMnemonic(mnemonic, 44, 195, 0, 0, 0, true);
+    private static int hexDigit(char value) {
+        if (value >= '0' && value <= '9') return value - '0';
+        if (value >= 'a' && value <= 'f') return value - 'a' + 10;
+        if (value >= 'A' && value <= 'F') return value - 'A' + 10;
+        return -1;
     }
 
     /**
@@ -248,41 +337,33 @@ public class Wallet implements Comparable<Wallet> {
      * null, so callers must check this result (or {@link #isOpen()}) before continuing a
      * sensitive flow rather than assuming a key is present.
      */
-    private boolean generateKeyForMnemonic(String mnemonic, int purpose, int coinType,
-            int account, int change, int accountIndex) {
-        return generateKeyForMnemonic(mnemonic, purpose, coinType, account, change, accountIndex,
-                false);
-    }
-
-    private boolean generateKeyForMnemonic(String mnemonic, int purpose, int coinType,
+    private boolean generateKeyForMnemonic(char[] mnemonic, int purpose, int coinType,
             int account, int change, int accountIndex, boolean strictVerification) {
         boolean isAccepted = mnemonic != null
-                && !mnemonic.isEmpty()
-                && (!strictVerification || MnemonicUtils.validateMnemonicStrict(mnemonic));
+                && mnemonic.length != 0
+                && (!strictVerification || MnemonicUtils.validateMnemonicStrictChars(mnemonic));
         if (isAccepted) {
-            ECKey tempKey = null;
             byte[] seed = null;
+            byte[] derivedPrivate = null;
             try {
                 WalletPath.validate(purpose, coinType, account, change, accountIndex);
-                seed = MnemonicUtils.generateSeed(mnemonic, null);
+                seed = MnemonicUtils.generateSeedFromChars(mnemonic, null);
                 Bip32ECKeyPair masterKeypair = Bip32ECKeyPair.generateKeyPair(seed);
                 Bip32ECKeyPair bip44Keypair = generateBip44KeyPair(masterKeypair, purpose, coinType, account, change, accountIndex);
-                privateKeyBytes33 = bip44Keypair.getPrivateKeyBytes33();
-                tempKey = ECKey.fromPrivate(privateKeyBytes33);
+                derivedPrivate = bip44Keypair.getPrivateKeyBytes33();
+                ECKey key = ECKey.fromPrivate(derivedPrivate);
+                mECKey = key;
+                privateKeyBytes33 = derivedPrivate;
+                derivedPrivate = null;
+                return true;
             } catch (Exception ex) {
                 // Keep failure logging minimal: record the exception type only.
                 LogUtils.e(TAG, "generateKeyForMnemonic failed: " + ex.getClass().getSimpleName());
+                return false;
             } finally {
-                if (seed != null) {
-                    Arrays.fill(seed, (byte) 0);
-                }
+                SensitiveData.clear(seed);
+                SensitiveData.clear(derivedPrivate);
             }
-
-            mECKey = tempKey;
-            if (mECKey == null) {
-                privateKeyBytes33 = null;
-            }
-            return mECKey != null;
         } else {
             mECKey = null;
             privateKeyBytes33 = null;
@@ -354,8 +435,9 @@ public class Wallet implements Comparable<Wallet> {
     }
 
     public String getAddress() {
-        if (mECKey != null && AddressUtil.isEmpty(address)) {
-            return AddressUtil.encode58Check(mECKey.getAddress());
+        ECKey key = mECKey;
+        if (key != null && AddressUtil.isEmpty(address)) {
+            return AddressUtil.encode58Check(key.getAddress());
         } else if (publicKey != null && AddressUtil.isEmpty(address)) {
             return AddressUtil.encode58Check(ECKey.fromPublicOnly(publicKey).getAddress());
         } else {
@@ -364,8 +446,9 @@ public class Wallet implements Comparable<Wallet> {
     }
 
     public byte[] getDecode58CheckAddress() {
-        if (mECKey != null && AddressUtil.isEmpty(address)) {
-            return mECKey.getAddress();
+        ECKey key = mECKey;
+        if (key != null && AddressUtil.isEmpty(address)) {
+            return key.getAddress();
         } else if (publicKey != null && AddressUtil.isEmpty(address)) {
             return ECKey.fromPublicOnly(publicKey).getAddress();
         } else {
@@ -451,12 +534,9 @@ public class Wallet implements Comparable<Wallet> {
 
     //    ================= END =============================
 
-    public void clearSensitiveData() {
-
-        if (mnemonic != null) {
-            clearCharArray(mnemonic.toCharArray());
-            mnemonic = null;
-        }
+    public synchronized void clearSensitiveData() {
+        SensitiveData.clear(mnemonicChars);
+        mnemonicChars = null;
         if (privateKeyBytes33 != null) {
             clearByteArray(privateKeyBytes33);
             privateKeyBytes33 = null;
@@ -468,13 +548,12 @@ public class Wallet implements Comparable<Wallet> {
         }
 
         if (mECKey != null) {
+            // Public metadata remains usable after releasing the signing-key reference.
+            if (publicKey == null) publicKey = mECKey.getPubKey();
+            if (AddressUtil.isEmpty(address)) address = AddressUtil.encode58Check(mECKey.getAddress());
             mECKey = null;
         }
-
-        if (keyStore != null && !keyStore.isEmpty()) {
-            clearCharArray(keyStore.toCharArray());
-            keyStore = null;
-        }
+        keyStore = null;
     }
 
     private void clearByteArray(byte[] data) {
@@ -483,9 +562,4 @@ public class Wallet implements Comparable<Wallet> {
         }
     }
 
-    private void clearCharArray(char[] data) {
-        if (data != null) {
-            Arrays.fill(data, '\0');
-        }
-    }
 }

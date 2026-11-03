@@ -2,6 +2,7 @@ package org.tron.common.bip32;
 
 import org.bouncycastle.math.ec.ECPoint;
 import org.tron.common.crypto.Hash;
+import org.tron.common.utils.SensitiveData;
 
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
@@ -45,22 +46,23 @@ public class Bip32ECKeyPair extends ECKeyPair {
     }
 
     public static Bip32ECKeyPair generateKeyPair(byte[] seed) {
-        byte[] i = Hash.hmacSha512("Bitcoin seed".getBytes(StandardCharsets.UTF_8), seed);
-        byte[] il = Arrays.copyOfRange(i, 0, 32);
-        byte[] ir = Arrays.copyOfRange(i, 32, 64);
-        Arrays.fill(i, (byte) 0);
-        // BIP-32: the master private key I_L must be in [1, n-1]; otherwise the seed is invalid.
-        BigInteger ilInt = new BigInteger(1, il);
-        if (ilInt.signum() == 0 || ilInt.compareTo(Sign.CURVE.getN()) >= 0) {
-            Arrays.fill(il, (byte) 0);
-            Arrays.fill(ir, (byte) 0);
-            throw new IllegalArgumentException("Invalid BIP-32 seed: master key not in [1, n-1]");
+        byte[] i = null;
+        byte[] il = null;
+        byte[] ir = null;
+        try {
+            i = Hash.hmacSha512("Bitcoin seed".getBytes(StandardCharsets.UTF_8), seed);
+            il = Arrays.copyOfRange(i, 0, 32);
+            ir = Arrays.copyOfRange(i, 32, 64);
+            BigInteger scalar = new BigInteger(1, il);
+            if (scalar.signum() == 0 || scalar.compareTo(Sign.CURVE.getN()) >= 0) {
+                throw new IllegalArgumentException("Invalid BIP-32 seed: master key not in [1, n-1]");
+            }
+            return Bip32ECKeyPair.create(il, ir);
+        } finally {
+            SensitiveData.clear(i);
+            SensitiveData.clear(il);
+            SensitiveData.clear(ir);
         }
-        Bip32ECKeyPair keypair = Bip32ECKeyPair.create(il, ir);
-        Arrays.fill(il, (byte) 0);
-        Arrays.fill(ir, (byte) 0);
-
-        return keypair;
     }
 
     public static Bip32ECKeyPair deriveKeyPair(Bip32ECKeyPair master, int[] path) {
@@ -75,57 +77,52 @@ public class Bip32ECKeyPair extends ECKeyPair {
     }
 
     private Bip32ECKeyPair deriveChildKey(int childNumber) {
-        if (!hasPrivateKey()) {
-            byte[] parentPublicKey = getPublicKeyPoint().getEncoded(true);
-            ByteBuffer data = ByteBuffer.allocate(37);
-            data.put(parentPublicKey);
-            data.putInt(childNumber);
-            byte[] i = Hash.hmacSha512(getChainCode(), data.array());
-            byte[] il = Arrays.copyOfRange(i, 0, 32);
-            byte[] chainCode = Arrays.copyOfRange(i, 32, 64);
-            Arrays.fill(i, (byte) 0);
-            BigInteger ilInt = new BigInteger(1, il);
-            Arrays.fill(il, (byte) 0);
-            // BIP-32: if parse(I_L) >= n the child is invalid and must be skipped.
-            if (ilInt.compareTo(Sign.CURVE.getN()) >= 0) {
-                throw new IllegalArgumentException("Invalid BIP-32 child key: I_L >= n");
-            }
-            ECPoint ki = Sign.publicPointFromPrivate(ilInt).add(getPublicKeyPoint());
-            // BIP-32: the resulting public point must not be the point at infinity.
-            if (ki.isInfinity()) {
-                throw new IllegalArgumentException("Invalid BIP-32 child key: point at infinity");
-            }
-
-            return new Bip32ECKeyPair(null,
-                    Sign.publicFromPoint(ki.getEncoded(true)),
-                    childNumber, chainCode, this);
-        } else {
-            ByteBuffer data = ByteBuffer.allocate(37);
-            if (isHardened(childNumber)) {
-                data.put(getPrivateKeyBytes33());
+        byte[] data = new byte[37];
+        byte[] parentPrivate = null;
+        byte[] parentChain = null;
+        byte[] i = null;
+        byte[] il = null;
+        byte[] childChain = null;
+        try {
+            boolean privateDerivation = hasPrivateKey();
+            ByteBuffer buffer = ByteBuffer.wrap(data);
+            if (privateDerivation && isHardened(childNumber)) {
+                parentPrivate = getPrivateKeyBytes33();
+                buffer.put(parentPrivate);
             } else {
-                byte[] parentPublicKey = getPublicKeyPoint().getEncoded(true);
-                data.put(parentPublicKey);
+                buffer.put(getPublicKeyPoint().getEncoded(true));
             }
-            data.putInt(childNumber);
-            byte[] i = Hash.hmacSha512(getChainCode(), data.array());
-            byte[] il = Arrays.copyOfRange(i, 0, 32);
-            byte[] chainCode = Arrays.copyOfRange(i, 32, 64);
-            Arrays.fill(i, (byte) 0);
-            BigInteger ilInt = new BigInteger(1, il);
-            Arrays.fill(il, (byte) 0);
-            // BIP-32: if parse(I_L) >= n the child is invalid and must be skipped.
-            if (ilInt.compareTo(Sign.CURVE.getN()) >= 0) {
+            buffer.putInt(childNumber);
+            parentChain = getChainCode();
+            i = Hash.hmacSha512(parentChain, data);
+            il = Arrays.copyOfRange(i, 0, 32);
+            childChain = Arrays.copyOfRange(i, 32, 64);
+            BigInteger scalar = new BigInteger(1, il);
+            if (scalar.compareTo(Sign.CURVE.getN()) >= 0) {
                 throw new IllegalArgumentException("Invalid BIP-32 child key: I_L >= n");
             }
-            BigInteger privateKey = getPrivateKey().add(ilInt).mod(Sign.CURVE.getN());
-            // BIP-32: a derived private key of 0 is invalid and must be skipped.
+            if (!privateDerivation) {
+                ECPoint point = Sign.publicPointFromPrivate(scalar).add(getPublicKeyPoint());
+                if (point.isInfinity()) {
+                    throw new IllegalArgumentException("Invalid BIP-32 child key: point at infinity");
+                }
+                return new Bip32ECKeyPair(null, Sign.publicFromPoint(point.getEncoded(true)),
+                        childNumber, childChain, this);
+            }
+            BigInteger privateKey = getPrivateKey().add(scalar).mod(Sign.CURVE.getN());
             if (privateKey.signum() == 0) {
                 throw new IllegalArgumentException("Invalid BIP-32 child key: derived private key is 0");
             }
-
+            // The constructor copies its chain code before this method clears its temporary.
             return new Bip32ECKeyPair(privateKey, Sign.publicKeyFromPrivate(privateKey),
-                    childNumber, chainCode, this);
+                    childNumber, childChain, this);
+        } finally {
+            SensitiveData.clear(data);
+            SensitiveData.clear(parentPrivate);
+            SensitiveData.clear(parentChain);
+            SensitiveData.clear(i);
+            SensitiveData.clear(il);
+            SensitiveData.clear(childChain);
         }
     }
 
@@ -175,8 +172,12 @@ public class Bip32ECKeyPair extends ECKeyPair {
 
         byte[] bytes33 = new byte[numBytes];
         byte[] priv = bigIntegerToBytes32(getPrivateKey());
-        System.arraycopy(priv, 0, bytes33, numBytes - priv.length, priv.length);
-        return bytes33;
+        try {
+            System.arraycopy(priv, 0, bytes33, numBytes - priv.length, priv.length);
+            return bytes33;
+        } finally {
+            SensitiveData.clear(priv);
+        }
     }
 
     private boolean hasPrivateKey() {
@@ -187,13 +188,15 @@ public class Bip32ECKeyPair extends ECKeyPair {
         final int numBytes = 32;
 
         byte[] src = b.toByteArray();
-        byte[] dest = new byte[numBytes];
-        boolean isFirstByteOnlyForSign = src[0] == 0;
-        int length = isFirstByteOnlyForSign ? src.length - 1 : src.length;
-        int srcPos = isFirstByteOnlyForSign ? 1 : 0;
-        int destPos = numBytes - length;
-        System.arraycopy(src, srcPos, dest, destPos, length);
-        return dest;
+        try {
+            byte[] dest = new byte[numBytes];
+            boolean signByte = src[0] == 0;
+            int length = signByte ? src.length - 1 : src.length;
+            System.arraycopy(src, signByte ? 1 : 0, dest, numBytes - length, length);
+            return dest;
+        } finally {
+            SensitiveData.clear(src);
+        }
     }
 
     private static boolean isHardened(int a) {
