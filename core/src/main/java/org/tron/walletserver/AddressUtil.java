@@ -104,6 +104,11 @@ public class AddressUtil {
     }
 
 
+    /**
+     * Removes Base58Check encoding or optional hexadecimal/network prefixes.
+     * A hex {@code 41} is a network prefix only at the 21-byte address width;
+     * at 20 bytes it belongs to the address payload and must be preserved.
+     */
     public static String replace41Address(String address) {
         if (address == null) {
             // Fail fast on malformed input instead of throwing a bare NPE on
@@ -123,15 +128,14 @@ public class AddressUtil {
             unPreAddress = ByteArray.toHexString(decoded);
 
             return unPreAddress.replaceFirst("41", "");
-        } else if (address.startsWith("41")) {
-            // SECURITY-SCAN S-01 - Ignored after manual security review: This behavior is required
-            // for Ethereum-address compatibility, as web3j's Address(String) normalizes
-            // variable-width hexadecimal input through BigInteger and Uint160.
-            return unPreAddress.replaceFirst("41", "");
-        } else if (address.startsWith("0x")) {
-            return unPreAddress.replaceFirst("0x", "");
         }
-        // No recognized prefix: assume the input is already raw hex and return as-is.
+        if (address.startsWith("0x") || address.startsWith("0X")) {
+            unPreAddress = address.substring(2);
+        }
+        if (unPreAddress.length() == HEX_ADDRESS_LENGTH && unPreAddress.startsWith("41")) {
+            return unPreAddress.substring(2);
+        }
+        // Raw hex, including a 20-byte payload beginning with 41, is already unprefixed.
         return unPreAddress;
     }
 
