@@ -28,6 +28,7 @@ import com.google.gson.reflect.TypeToken;
 
 import org.tron.common.bip32.Numeric;
 import org.tron.common.crypto.datatypes.AbiTypes;
+import org.tron.common.crypto.datatypes.Address;
 import org.tron.common.crypto.datatypes.Type;
 import org.tron.common.utils.LogUtils;
 import org.tron.walletserver.AddressUtil;
@@ -74,8 +75,8 @@ public class StructuredDataEncoder {
             String chainId = optString(obj, "chainId");
             String verifyingContract = optString(obj, "verifyingContract");
             String salt = optString(obj, "salt");
-            org.tron.common.crypto.datatypes.Address addressObj = verifyingContract != null
-                    ? new org.tron.common.crypto.datatypes.Address(verifyingContract) : null;
+            Address addressObj = verifyingContract != null
+                    ? new Address(verifyingContract) : null;
             return new StructuredData.EIP712Domain(name, version, chainId, addressObj, salt);
         }
 
@@ -169,16 +170,14 @@ public class StructuredDataEncoder {
     public String encodeStruct(String structName) {
         HashMap<String, List<StructuredData.Entry>> types = jsonMessageObject.getTypes();
 
-        StringBuilder structRepresentation = new StringBuilder(structName + "(");
+        StringBuilder structRepresentation = new StringBuilder(structName).append('(');
+        String separator = "";
         for (StructuredData.Entry entry : types.get(structName)) {
-            structRepresentation.append(String.format("%s %s,", entry.getType(), entry.getName()));
+            structRepresentation.append(separator)
+                    .append(entry.getType()).append(' ').append(entry.getName());
+            separator = ",";
         }
-        structRepresentation =
-                new StringBuilder(
-                        structRepresentation.substring(0, structRepresentation.length() - 1));
-        structRepresentation.append(")");
-
-        return structRepresentation.toString();
+        return structRepresentation.append(')').toString();
     }
 
     public String encodeType(String primaryType) {
@@ -290,7 +289,8 @@ public class StructuredDataEncoder {
         byte[] hashBytes;
         try {
             if (baseType.toLowerCase(Locale.ROOT).startsWith("uint")
-                    || baseType.toLowerCase(Locale.ROOT).startsWith("int")) {
+                    || baseType.toLowerCase(Locale.ROOT).startsWith("int")
+                    || baseType.equals("trcToken")) {
                 // accepted (Q-07): array elements are hand-padded from the raw BigInteger
                 // without constructing the declared UintN/IntN, so no bit-width or sign
                 // check runs: uint8[] accepts 256 and uint*[] accepts negatives, producing
@@ -370,6 +370,11 @@ public class StructuredDataEncoder {
                             lastConstructorFailure);
                 }
                 hashBytes = encodedItem;
+            } else if (baseType.equals("address")) {
+                // Encode as hexadecimal uint160. encodeArray already normalized the
+                // address prefix, so preserve any leading 41 in the remaining payload.
+                Address address = new Address((String) data, false);
+                hashBytes = Numeric.hexStringToByteArray(TypeEncoder.encode(address));
             } else {
                 byte[] b = convertArgToBytes((String) data);
                 BigInteger bi = new BigInteger(1, b);
@@ -386,31 +391,72 @@ public class StructuredDataEncoder {
         return hashBytes;
     }
 
-    private List<Object> getArrayItems(StructuredData.Entry field, Object value) {
-        List<Integer> expectedDimensions = getArrayDimensionsFromDeclaration(field.getType());
-        // This function will itself give out errors in case
-        // that the data is not a proper array
-        List<Integer> dataDimensions = getArrayDimensionsFromData(value);
-
-        final String format =
-                String.format(
-                        "Array Data %s has dimensions %s, " + "but expected dimensions are %s",
-                        value.toString(), dataDimensions.toString(), expectedDimensions.toString());
-        if (expectedDimensions.size() != dataDimensions.size()) {
-            // Ex: Expected a 3d array, but got only a 2d array
-            throw new IllegalArgumentException(format);
-        }
-        for (int i = 0; i < expectedDimensions.size(); i++) {
-            if (expectedDimensions.get(i) == -1) {
-                // Skip empty or dynamically declared dimensions
-                continue;
-            }
-            if (!expectedDimensions.get(i).equals(dataDimensions.get(i))) {
-                throw new IllegalArgumentException(format);
-            }
+    /**
+     * Encodes one array layer at a time, matching TronWeb's TypedDataEncoder.
+     *
+     * <p>The final suffix is the current (outermost) dimension. For example,
+     * {@code uint256[2][3]} is a three-element array whose elements are
+     * {@code uint256[2]}. Each child array returns its own hash before the parent
+     * concatenates and hashes those child values. This preserves nesting boundaries
+     * and naturally permits ragged or empty dynamic dimensions.
+     */
+    @SuppressWarnings("unchecked")
+    private byte[] encodeArray(String arrayType, Object value) {
+        if (!(value instanceof List)) {
+            throw new IllegalArgumentException(
+                    String.format("Expected array value for EIP-712 type %s", arrayType));
         }
 
-        return flattenMultidimensionalArray(value);
+        int dimensionStart = arrayType.lastIndexOf('[');
+        if (dimensionStart < 0 || !arrayType.endsWith("]")) {
+            throw new IllegalArgumentException("Invalid EIP-712 array type: " + arrayType);
+        }
+
+        String subtype = arrayType.substring(0, dimensionStart);
+        String declaredLength =
+                arrayType.substring(dimensionStart + 1, arrayType.length() - 1);
+        List<Object> values = (List<Object>) value;
+        if (!declaredLength.isEmpty()) {
+            int expectedLength = Integer.parseInt(declaredLength);
+            if (values.size() != expectedLength) {
+                throw new IllegalArgumentException(
+                        String.format(
+                                "Array value has length %d, but EIP-712 type %s requires %d",
+                                values.size(), arrayType, expectedLength));
+            }
+        }
+
+        HashMap<String, List<StructuredData.Entry>> types = jsonMessageObject.getTypes();
+        ByteArrayOutputStream encodedItems = new ByteArrayOutputStream();
+        for (Object item : values) {
+            byte[] encodedItem;
+            if (arrayTypePattern.matcher(subtype).matches()) {
+                encodedItem = encodeArray(subtype, item);
+            } else if (types.containsKey(subtype)) {
+                if (!(item instanceof Map)) {
+                    throw new IllegalArgumentException(
+                            String.format("Expected struct value for EIP-712 type %s", subtype));
+                }
+                encodedItem = sha3(encodeData(subtype, (Map<String, Object>) item));
+            } else {
+                Object normalizedItem = item;
+                if (subtype.equals("address")) {
+                    if (!(item instanceof String)) {
+                        throw new IllegalArgumentException(
+                                "Expected string address in EIP-712 array");
+                    }
+                    String address = (String) item;
+                    if (address.startsWith("41")) {
+                        addressParseList.add(address);
+                    }
+                    normalizedItem = AddressUtil.replace41Address(address);
+                }
+                encodedItem = convertToEncodedItem(subtype, normalizedItem);
+            }
+            encodedItems.write(encodedItem, 0, encodedItem.length);
+        }
+
+        return sha3(encodedItems.toByteArray());
     }
 
     @SuppressWarnings("unchecked")
@@ -457,55 +503,8 @@ public class StructuredDataEncoder {
                 encTypes.add(field.getType());
                 encValues.add(Numeric.hexStringToByteArray((String) value));
             } else if (arrayTypePattern.matcher(field.getType()).find()) {
-                String baseTypeName = field.getType().substring(0, field.getType().indexOf('['));
-                ArrayList<Object> objects = new ArrayList<>();
-                if (baseTypeName.equals("address") && value instanceof List) {
-                    ArrayList<String> arrayList = (ArrayList) value;
-                    arrayList.stream().forEach(addressPre -> {
-                        if ((addressPre).startsWith("41")) {
-                            addressParseList.add(addressPre);
-                        }
-
-                        objects.add(AddressUtil.replace41Address(addressPre));
-                    });
-                    value = objects;
-                }
-                // accepted (S-01): multidimensional arrays are flattened and hashed ONCE,
-                // instead of hashing each nesting level separately as EIP-712 reference
-                // implementations (ethers.js / eth-sig-util) do. Structurally different
-                // values of the same declared type — e.g. uint256[][] [[1,2],[3,4]] vs
-                // [[1,2,3,4]] — therefore share one field hash, and multidimensional
-                // hashes do not interop with standard verifiers. This mirrors upstream
-                // web3j StructuredDataEncoder behavior and is kept as-is on a shipping
-                // wallet; 1-dimensional arrays (the practical dapp case) are unaffected.
-                List<Object> arrayItems = getArrayItems(field, value);
-                ByteArrayOutputStream concatenatedArrayEncodingBuffer = new ByteArrayOutputStream();
-
-                for (Object arrayItem : arrayItems) {
-                    byte[] arrayItemEncoding;
-                    if (types.containsKey(baseTypeName)) {
-                        arrayItemEncoding =
-                                sha3(
-                                        encodeData(
-                                                baseTypeName,
-                                                (Map<String, Object>)
-                                                        arrayItem)); // need to hash each user type
-                        // before adding
-                    } else {
-                        arrayItemEncoding =
-                                convertToEncodedItem(
-                                        baseTypeName,
-                                        arrayItem); // add raw item, packed to 32 bytes
-                    }
-
-                    concatenatedArrayEncodingBuffer.write(
-                            arrayItemEncoding, 0, arrayItemEncoding.length);
-                }
-
-                byte[] concatenatedArrayEncodings = concatenatedArrayEncodingBuffer.toByteArray();
-                byte[] hashedValue = sha3(concatenatedArrayEncodings);
                 encTypes.add("bytes32");
-                encValues.add(hashedValue);
+                encValues.add(encodeArray(field.getType(), value));
             } else if (field.getType().startsWith("uint") || field.getType().startsWith("int") || field.getType().equals("trcToken")) {
                 encTypes.add(field.getType());
                 // Convert to BigInteger for ABI constructor compatibility. Do NOT fall back to the
