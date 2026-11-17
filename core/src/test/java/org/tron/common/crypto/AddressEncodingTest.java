@@ -152,6 +152,27 @@ public class AddressEncodingTest {
     }
 
     @Test
+    public void typedDataNestedAddressArrays_matchDigestAndDisplayClassification() throws Exception {
+        for (String payload : PAYLOADS) {
+            String tronHex = "41" + payload;
+            StructuredDataEncoder encoder = encoder("address[][]", List.of(
+                    List.of(tronHex, payload),
+                    List.of(),
+                    List.of("0x" + tronHex, "0X" + tronHex,
+                            AddressUtil.encode58Check(Hex.decode(tronHex)))), "0x" + payload);
+            byte[] encodedArray = hash(
+                    hash(word(payload), word(payload)),
+                    hash(),
+                    hash(word(payload), word(payload), word(payload)));
+
+            Assert.assertArrayEquals(referenceDigest("address[][]", encodedArray, payload),
+                    encoder.hashStructuredData());
+            Assert.assertEquals(List.of(tronHex, "0x" + tronHex, "0X" + tronHex),
+                    encoder.getParseAddressList());
+        }
+    }
+
+    @Test
     public void signature_authorizesIntendedRecipientInsteadOfTruncatedAddress() throws Exception {
         ECKey key = ECKey.fromPrivate(BigInteger.ONE); // Public test key, used only locally.
         String truncated = "00" + LEADING_41.substring(2);

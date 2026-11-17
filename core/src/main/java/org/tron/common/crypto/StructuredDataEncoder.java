@@ -323,6 +323,11 @@ public class StructuredDataEncoder {
             } else if (baseType.equals("bool")) {
                 BigInteger bi = new BigInteger((boolean) data ? "1" : "0");
                 hashBytes = Numeric.toBytesPadded(bi, 32);
+            } else if (baseType.equals("address")) {
+                // The array path already removed Base58/hex/network prefixes. Parse the
+                // remaining value as hex using the same encoder as scalar addresses.
+                hashBytes = Numeric.hexStringToByteArray(
+                        TypeEncoder.encode(new Address((String) data, false)));
             } else if (bytesTypePattern.matcher(baseType).find()) {
                 // Enforce the exact bytesN length up front. BytesN constructors reject
                 // wrong lengths, but that failure used to be swallowed below, letting the
@@ -370,11 +375,6 @@ public class StructuredDataEncoder {
                             lastConstructorFailure);
                 }
                 hashBytes = encodedItem;
-            } else if (baseType.equals("address")) {
-                // Encode as hexadecimal uint160. encodeArray already normalized the
-                // address prefix, so preserve any leading 41 in the remaining payload.
-                Address address = new Address((String) data, false);
-                hashBytes = Numeric.hexStringToByteArray(TypeEncoder.encode(address));
             } else {
                 byte[] b = convertArgToBytes((String) data);
                 BigInteger bi = new BigInteger(1, b);
@@ -446,7 +446,7 @@ public class StructuredDataEncoder {
                                 "Expected string address in EIP-712 array");
                     }
                     String address = (String) item;
-                    if (address.startsWith("41")) {
+                    if (AddressUtil.isTronHexAddress(address)) {
                         addressParseList.add(address);
                     }
                     normalizedItem = AddressUtil.replace41Address(address);
@@ -519,7 +519,9 @@ public class StructuredDataEncoder {
                             "Failed to encode EIP-712 numeric field of type " + field.getType(), e);
                 }
             } else if (field.getType().equals("address")) {
-                if (((String) value).startsWith("41")) {
+                // Same rule replace41Address uses, so the confirmation page only
+                // renders as Base58 the addresses that are signed as TRON addresses.
+                if (AddressUtil.isTronHexAddress((String) value)) {
                     addressParseList.add((String) value);
                 }
                 // no need replace, Address object will remove it auto
